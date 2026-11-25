@@ -5,7 +5,8 @@ import { Link, navigate, useLocation } from '../../app/router';
 import { useData } from '../../hooks/useData';
 import { formatTime } from '../../utils/format';
 import { currentUser, initials, useSession } from '../../app/session';
-import { httpDataSource } from '../../api';
+import { httpDataSource, management } from '../../api';
+import { FormModal, KeepOpen, TextField } from '../ui/Modal';
 import { DEVICE_TYPE_LABEL } from '../../utils/status';
 import { Icon, deviceIcon, type IconName } from '../ui/Icon';
 import { StatusDot } from '../ui';
@@ -136,18 +137,51 @@ function GlobalSearch() {
 
 function UserChip() {
   useSession();
+  const [pwOpen, setPwOpen] = useState(false);
   const user = currentUser(dataSource.kind === 'mock');
   if (!user) return null;
   return (
     <div className="user-chip" title={`${user.name} (${user.role})`}>
       <span className="avatar">{initials(user.name)}</span>
-      <span className="name">{user.login}</span>
+      {management ? (
+        <button className="name name-btn" onClick={() => setPwOpen(true)} title="Eigenes Passwort ändern">{user.login}</button>
+      ) : (
+        <span className="name">{user.login}</span>
+      )}
+      {pwOpen && <ChangeOwnPasswordDialog onClose={() => setPwOpen(false)} />}
       {httpDataSource && (
         <button className="btn small ghost logout" onClick={() => void httpDataSource?.logout()} title="Abmelden">
           Abmelden
         </button>
       )}
     </div>
+  );
+}
+
+function ChangeOwnPasswordDialog({ onClose }: { onClose: () => void }) {
+  const [current, setCurrent] = useState('');
+  const [next, setNext] = useState('');
+  const [next2, setNext2] = useState('');
+  const [done, setDone] = useState(false);
+  if (done) {
+    return (
+      <FormModal title="Passwort geändert" submitLabel="OK" onClose={onClose} onSubmit={async () => undefined}>
+        <div>Das Passwort wurde geändert. Andere Anmeldungen dieses Kontos wurden beendet.</div>
+      </FormModal>
+    );
+  }
+  return (
+    <FormModal title="Eigenes Passwort ändern" submitLabel="Passwort ändern" onClose={onClose}
+      onSubmit={async () => {
+        if (next !== next2) throw new Error('Die neuen Passwörter stimmen nicht überein');
+        await management!.changeOwnPassword(current, next);
+        setDone(true);
+        throw new KeepOpen();
+      }}>
+      <TextField label="Aktuelles Passwort" type="password" value={current} onChange={setCurrent} required autoFocus autoComplete="current-password" />
+      <TextField label="Neues Passwort" type="password" value={next} onChange={setNext} required autoComplete="new-password" hint="Mindestens 10 Zeichen" />
+      <TextField label="Neues Passwort wiederholen" type="password" value={next2} onChange={setNext2} required autoComplete="new-password" />
+    </FormModal>
   );
 }
 

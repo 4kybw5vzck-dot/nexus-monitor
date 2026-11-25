@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
-import { dataSource, type NotificationRule } from '../api';
+import { dataSource, management, type NotificationRule, type Role, type User } from '../api';
 import { appConfig } from '../app/config';
 import { updateQuery, useLocation } from '../app/router';
 import { DataTable } from '../components/ui/DataTable';
-import { Card, PageHeader, Skeleton, Tabs } from '../components/ui';
+import { Card, ErrorBox, PageHeader, Skeleton, Tabs } from '../components/ui';
+import { CheckboxField, FormModal, SelectField, TextField } from '../components/ui/Modal';
+import { currentUser, initials, useSession } from '../app/session';
 import { Icon } from '../components/ui/Icon';
 import { useData } from '../hooks/useData';
 import { formatRelative } from '../utils/format';
@@ -36,23 +38,123 @@ export function AdminPage() {
 
 function UsersTab() {
   const users = useData(() => dataSource.getUsers());
+  useSession();
+  const me = currentUser(dataSource.kind === 'mock');
+  const canEdit = !!management && me?.role === 'Administrator';
+  const [dialog, setDialog] = useState<
+    { kind: 'create' } | { kind: 'edit'; user: User } | { kind: 'password'; user: User } | { kind: 'delete'; user: User } | null
+  >(null);
+  if (users.error) return <ErrorBox error={users.error} />;
   if (!users.data) return <Skeleton height={260} />;
   return (
-    <Card flush title="Benutzer" sub="Lokale Benutzer · später zusätzlich LDAP/Active Directory und OIDC" actions={<button className="btn small" disabled title="Ab Phase 2"><Icon name="plus" size={14} /> Benutzer anlegen</button>}>
-      <DataTable
-        rows={users.data}
-        rowKey={(u) => u.id}
-        initialSort={{ key: 'name', dir: 'asc' }}
-        columns={[
-          { key: 'name', header: 'Name', render: (u) => <span className="hstack"><span className="avatar">{u.name.split(' ').map((p) => p[0]).join('').slice(0, 2)}</span><b>{u.name}</b></span>, sortValue: (u) => u.name },
-          { key: 'login', header: 'Anmeldename', render: (u) => <span className="mono">{u.login}</span>, sortValue: (u) => u.login },
-          { key: 'role', header: 'Rolle', render: (u) => u.role, sortValue: (u) => u.role },
-          { key: 'mail', header: 'E-Mail', render: (u) => <span className="muted">{u.email}</span> },
-          { key: 'last', header: 'Letzte Anmeldung', render: (u) => <span className="muted">{formatRelative(u.lastLogin)}</span>, sortValue: (u) => u.lastLogin },
-          { key: 'active', header: 'Status', render: (u) => (u.active ? <span className="badge s-ok">Aktiv</span> : <span className="badge s-paused">Deaktiviert</span>), sortValue: (u) => (u.active ? 0 : 1) },
-        ]}
-      />
-    </Card>
+    <>
+      <Card
+        flush
+        title="Benutzer"
+        sub={management ? 'Lokale Benutzer · später zusätzlich LDAP/Active Directory und OIDC' : 'Mock-Modus: Bearbeiten nur mit Backend möglich'}
+        actions={canEdit && <button className="btn small" onClick={() => setDialog({ kind: 'create' })}><Icon name="plus" size={14} /> Benutzer anlegen</button>}
+      >
+        <DataTable
+          rows={users.data}
+          rowKey={(u) => u.id}
+          initialSort={{ key: 'name', dir: 'asc' }}
+          columns={[
+            { key: 'name', header: 'Name', render: (u) => <span className="hstack"><span className="avatar">{initials(u.name)}</span><b>{u.name}</b></span>, sortValue: (u) => u.name },
+            { key: 'login', header: 'Anmeldename', render: (u) => <span className="mono">{u.login}</span>, sortValue: (u) => u.login },
+            { key: 'role', header: 'Rolle', render: (u) => u.role, sortValue: (u) => u.role },
+            { key: 'mail', header: 'E-Mail', render: (u) => <span className="muted">{u.email}</span> },
+            { key: 'last', header: 'Letzte Anmeldung', render: (u) => <span className="muted">{u.lastLogin ? formatRelative(u.lastLogin) : '–'}</span>, sortValue: (u) => u.lastLogin ?? '' },
+            {
+              key: 'active', header: 'Status', sortValue: (u) => (u.active ? 0 : 1),
+              render: (u) => !u.active
+                ? <span className="badge s-paused">Deaktiviert</span>
+                : u.hasPassword === false
+                  ? <span className="badge s-unknown" title="Ohne Passwort ist keine Anmeldung möglich">Kein Passwort</span>
+                  : <span className="badge s-ok">Aktiv</span>,
+            },
+            ...(canEdit ? [{
+              key: 'actions', header: '',
+              render: (u: User) => (
+                <div className="row-actions">
+                  <button className="btn small ghost" onClick={() => setDialog({ kind: 'edit', user: u })}>Bearbeiten</button>
+                  <button className="btn small ghost" onClick={() => setDialog({ kind: 'password', user: u })}><Icon name="key" size={13} /> Passwort</button>
+                  {u.id !== me?.id && <button className="btn small ghost" onClick={() => setDialog({ kind: 'delete', user: u })}>Löschen</button>}
+                </div>
+              ),
+            }] : []),
+          ]}
+        />
+      </Card>
+      {dialog?.kind === 'create' && <UserDialog onClose={() => setDialog(null)} />}
+      {dialog?.kind === 'edit' && <UserDialog user={dialog.user} self={dialog.user.id === me?.id} onClose={() => setDialog(null)} />}
+      {dialog?.kind === 'password' && <SetPasswordDialog user={dialog.user} onClose={() => setDialog(null)} />}
+      {dialog?.kind === 'delete' && (
+        <FormModal title="Benutzer löschen" submitLabel="Endgültig löschen" danger onClose={() => setDialog(null)} onSubmit={() => management!.deleteUser(dialog.user.id)}>
+          <div>Benutzer <b>{dialog.user.name}</b> (<span className="mono">{dialog.user.login}</span>) wird gelöscht. Das lässt sich nicht rückgängig machen.</div>
+          <div className="muted small">Alternative: Benutzer deaktivieren – dann bleiben Name und Verlauf erhalten.</div>
+        </FormModal>
+      )}
+    </>
+  );
+}
+
+const ROLE_OPTIONS: Array<{ value: Role; label: string }> = [
+  { value: 'Administrator', label: 'Administrator – alles' },
+  { value: 'Operator', label: 'Operator – lesen, Alarme bestätigen, Discovery' },
+  { value: 'Nur Lesen', label: 'Nur Lesen' },
+];
+
+function UserDialog({ user, self, onClose }: { user?: User; self?: boolean; onClose: () => void }) {
+  const [login, setLogin] = useState(user?.login ?? '');
+  const [name, setName] = useState(user?.name ?? '');
+  const [email, setEmail] = useState(user?.email ?? '');
+  const [role, setRole] = useState<Role>(user?.role ?? 'Operator');
+  const [active, setActive] = useState(user?.active ?? true);
+  const [password, setPassword] = useState('');
+  const [password2, setPassword2] = useState('');
+
+  async function save() {
+    if (!user) {
+      if (password && password !== password2) throw new Error('Die Passwörter stimmen nicht überein');
+      await management!.createUser({ login, name, email, role, active, password: password || undefined });
+    } else {
+      await management!.updateUser(user.id, { name, email, role, active });
+    }
+  }
+
+  return (
+    <FormModal title={user ? `Benutzer bearbeiten – ${user.login}` : 'Benutzer anlegen'} submitLabel={user ? 'Speichern' : 'Anlegen'} onClose={onClose} onSubmit={save}>
+      <div className="form-grid">
+        <TextField label="Anmeldename" value={login} onChange={setLogin} required autoFocus={!user} disabled={!!user} autoComplete="off"
+          hint={user ? 'Kann nicht geändert werden' : 'Buchstaben, Ziffern und . _ @ -'} />
+        <TextField label="Name" value={name} onChange={setName} required autoFocus={!!user} />
+        <TextField label="E-Mail" type="email" value={email} onChange={setEmail} />
+        <SelectField label="Rolle" value={role} onChange={setRole} options={ROLE_OPTIONS} disabled={self} hint={self ? 'Die eigene Rolle kann nicht geändert werden' : undefined} />
+      </div>
+      {!user && (
+        <div className="form-grid">
+          <TextField label="Passwort" type="password" value={password} onChange={setPassword} autoComplete="new-password" hint="Optional, mindestens 10 Zeichen. Ohne Passwort ist keine Anmeldung möglich." />
+          <TextField label="Passwort wiederholen" type="password" value={password2} onChange={setPassword2} autoComplete="new-password" />
+        </div>
+      )}
+      {!self && <CheckboxField label="Konto aktiv (Anmeldung erlaubt)" checked={active} onChange={setActive} />}
+    </FormModal>
+  );
+}
+
+function SetPasswordDialog({ user, onClose }: { user: User; onClose: () => void }) {
+  const [password, setPassword] = useState('');
+  const [password2, setPassword2] = useState('');
+  return (
+    <FormModal title={`Passwort setzen – ${user.login}`} submitLabel="Passwort setzen" onClose={onClose}
+      onSubmit={async () => {
+        if (password !== password2) throw new Error('Die Passwörter stimmen nicht überein');
+        await management!.setUserPassword(user.id, password);
+      }}>
+      <TextField label="Neues Passwort" type="password" value={password} onChange={setPassword} required autoFocus autoComplete="new-password" hint="Mindestens 10 Zeichen" />
+      <TextField label="Wiederholen" type="password" value={password2} onChange={setPassword2} required autoComplete="new-password" />
+      <div className="muted small">Bestehende Anmeldungen des Benutzers werden beendet.</div>
+    </FormModal>
   );
 }
 
@@ -136,10 +238,12 @@ function BackupTab() {
         </p>
         <pre className="mono" style={{ background: 'var(--bg-elev)', padding: 12, borderRadius: 6, border: '1px solid var(--border)', overflowX: 'auto' }}>
 {`# Sicherung
-./scripts/backup.sh
+./scripts/backup.sh                 (Linux)
+.\\scripts\\backup.ps1                 (Windows)
 
 # Wiederherstellung (auch auf neuem Server)
-./scripts/restore.sh backups/nexus-<zeitstempel>.tar.gz`}
+./scripts/restore.sh backups/nexus-<zeitstempel>.tar.gz
+.\\scripts\\restore.ps1 .\\backups\\nexus-<zeitstempel>.tar.gz`}
         </pre>
         <div className="muted small">Details: docs/BETRIEB.md im Projekt.</div>
       </Card>
@@ -147,7 +251,7 @@ function BackupTab() {
         <Icon name="info" size={18} />
         <div>{dataSource.kind === 'mock'
           ? 'Im Mock-Modus gibt es keine persistenten Daten – alle Werte entstehen im Browser. Die Sicherung betrifft dann nur die Konfiguration.'
-          : 'Die Sicherung enthält die Datenbank, sofern der Datenbankdienst läuft. Die Skripte sind Bash-Skripte (unter Windows: WSL oder Git Bash).'}</div>
+          : 'Die Sicherung enthält die Datenbank, sofern der Datenbankdienst läuft. Bash- und PowerShell-Skripte erzeugen dasselbe Archivformat.'}</div>
       </div>
     </div>
   );

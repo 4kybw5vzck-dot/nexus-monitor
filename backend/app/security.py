@@ -13,6 +13,7 @@ import hmac
 import secrets
 
 _N, _R, _P, _DKLEN = 2**14, 8, 1, 32
+MIN_PASSWORD_LENGTH = 10
 
 
 def hash_password(password: str) -> str:

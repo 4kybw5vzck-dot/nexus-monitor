@@ -17,9 +17,8 @@ from sqlalchemy import delete, select
 
 from . import models as m
 from .db import session_scope
+from .security import MIN_PASSWORD_LENGTH as MIN_LENGTH
 from .security import hash_password
-
-MIN_LENGTH = 10
 
 
 def set_password(login: str, password: str) -> None:

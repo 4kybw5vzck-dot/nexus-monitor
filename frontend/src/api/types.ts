@@ -162,6 +162,8 @@ export interface User {
   email: string;
   lastLogin: string;
   active: boolean;
+  /** Nur Backend: ohne Passwort ist keine Anmeldung möglich */
+  hasPassword?: boolean;
 }
 
 export interface NotificationRule {

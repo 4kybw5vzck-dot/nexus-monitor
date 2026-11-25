@@ -154,6 +154,8 @@ class User(ApiModel):
     email: str
     last_login: datetime | None
     active: bool
+    # Ohne Passwort ist keine Anmeldung möglich (z. B. Demo-Benutzer)
+    has_password: bool = False
 
 
 class NotificationRule(ApiModel):
@@ -193,6 +195,35 @@ class DiscoveryResult(ApiModel):
     type_guess: str
     open_services: list[str]
     already_monitored: bool
+
+
+Role = Literal["Administrator", "Operator", "Nur Lesen"]
+
+
+class UserCreate(ApiModel):
+    login: str = Field(min_length=2, max_length=100)
+    name: str = Field(min_length=1, max_length=200)
+    email: str = Field(default="", max_length=300)
+    role: Role
+    active: bool = True
+    # Optional: ohne Passwort kann sich der Benutzer erst nach "Passwort setzen" anmelden
+    password: str | None = Field(default=None, max_length=500)
+
+
+class UserUpdate(ApiModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    email: str | None = Field(default=None, max_length=300)
+    role: Role | None = None
+    active: bool | None = None
+
+
+class PasswordSet(ApiModel):
+    password: str = Field(max_length=500)
+
+
+class PasswordChange(ApiModel):
+    current_password: str = Field(min_length=1, max_length=500)
+    new_password: str = Field(max_length=500)
 
 
 class LoginRequest(ApiModel):

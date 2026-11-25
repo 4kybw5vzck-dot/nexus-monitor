@@ -48,7 +48,7 @@ def reset_failures() -> None:
 
 def user_to_api(u: m.User) -> s.User:
     return s.User(id=u.id, name=u.name, login=u.login, role=u.role, email=u.email,
-                  last_login=u.last_login, active=u.active)
+                  last_login=u.last_login, active=u.active, has_password=u.password_hash is not None)
 
 
 def current_user(authorization: str | None = Header(default=None), db: Session = Depends(get_db)) -> m.User:

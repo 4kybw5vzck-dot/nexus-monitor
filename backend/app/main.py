@@ -18,6 +18,7 @@ from sqlalchemy import text
 from . import __version__
 from .api import public, router
 from .auth import router as auth_router
+from .users import router as users_router
 from .config import get_settings
 from .db import get_engine, session_scope
 from .seed import ensure_admin, seed_demo
@@ -72,6 +73,7 @@ def create_app(run_startup: bool = True) -> FastAPI:
     )
     app.include_router(public)
     app.include_router(auth_router)
+    app.include_router(users_router)
     app.include_router(router)
     return app
 

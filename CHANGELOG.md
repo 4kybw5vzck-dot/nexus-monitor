@@ -34,3 +34,11 @@
 - **Wiederherstellung:** `restore.sh` hält das Backend an, legt die Datenbank neu an und aktiviert TimescaleDB vor `timescaledb_pre_restore()`.
 - Tests: Backend 38 (pytest gegen PostgreSQL), Frontend 25 (Vitest).
 
+## 0.2.1
+
+- **Benutzerverwaltung in der Oberfläche** (Administration → Benutzer & Rollen, nur Administratoren): anlegen, bearbeiten, deaktivieren, löschen, Passwort setzen. Schutz gegen Aussperren (eigenes Konto nicht deaktivierbar/herabstufbar/löschbar).
+- **Eigenes Passwort ändern** über den Anmeldenamen oben rechts; andere Sitzungen werden beendet.
+- API: `POST/PATCH/DELETE /api/users`, `POST /api/users/{id}/password`, `POST /api/auth/password`; Benutzerliste zeigt `hasPassword`.
+- **PowerShell-Skripte** `scripts/backup.ps1` und `scripts/restore.ps1` (Windows PowerShell 5.1 und 7), gleiches Archivformat wie die Bash-Skripte. Der Dump wird per `docker compose cp` übertragen (keine Umleitung von Binärdaten).
+- Validierungsfehler der API nennen das betroffene Feld.
+

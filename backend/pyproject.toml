@@ -1,6 +1,6 @@
 [project]
 name = "nexus-monitor-backend"
-version = "0.2.0"
+version = "0.2.1"
 description = "NEXUS Monitor – REST-API (FastAPI) mit PostgreSQL/TimescaleDB"
 requires-python = ">=3.10"
 # Bewusst wenige Abhängigkeiten. Passwort-Hashing (scrypt) und Sitzungs-Token

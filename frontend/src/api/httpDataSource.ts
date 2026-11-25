@@ -15,6 +15,7 @@ import type {
   User,
 } from './types';
 import { getSession, setSession, type Session } from '../app/session';
+import type { ManagementApi, UserInput } from './management';
 
 /** Fehler der API mit HTTP-Status und lesbarer Meldung (Feld "detail" von FastAPI). */
 export class ApiError extends Error {
@@ -33,7 +34,13 @@ async function readError(res: Response): Promise<string> {
   try {
     const body = (await res.json()) as { detail?: unknown };
     if (typeof body.detail === 'string') return body.detail;
-    if (Array.isArray(body.detail)) return 'Ungültige Eingabe';
+    if (Array.isArray(body.detail)) {
+      // Validierungsfehler von FastAPI: [{loc: ['body', 'feld'], msg: '…'}]
+      const fields = body.detail
+        .map((d: { loc?: unknown[] }) => (Array.isArray(d.loc) ? String(d.loc[d.loc.length - 1]) : ''))
+        .filter((f: string) => f && f !== 'body');
+      return fields.length ? `Ungültige Eingabe: ${[...new Set(fields)].join(', ')}` : 'Ungültige Eingabe';
+    }
   } catch {
     /* kein JSON */
   }
@@ -129,6 +136,27 @@ export class HttpDataSource implements MonitoringDataSource {
       setSession(null);
     }
   }
+
+  // ---------- Verwaltung ----------
+
+  private send<T>(method: string, path: string, body?: unknown): Promise<T> {
+    return this.request<T>(path, { method, body: body === undefined ? undefined : JSON.stringify(body) });
+  }
+
+  /** Änderungen lösen ein Neuladen aller Ansichten aus. */
+  private async mutate<T>(method: string, path: string, body?: unknown): Promise<T> {
+    const result = await this.send<T>(method, path, body);
+    this.emit();
+    return result;
+  }
+
+  readonly management: ManagementApi = {
+    createUser: (input: UserInput) => this.mutate<User>('POST', '/users', { ...input, password: input.password || null }),
+    updateUser: (id, patch) => this.mutate<User>('PATCH', `/users/${encodeURIComponent(id)}`, patch),
+    setUserPassword: (id, password) => this.mutate<void>('POST', `/users/${encodeURIComponent(id)}/password`, { password }),
+    deleteUser: (id) => this.mutate<void>('DELETE', `/users/${encodeURIComponent(id)}`),
+    changeOwnPassword: (currentPassword, newPassword) => this.send<void>('POST', '/auth/password', { currentPassword, newPassword }),
+  };
 
   // ---------- MonitoringDataSource ----------
 

@@ -10,7 +10,7 @@
 | Hardware mit Backend (Richtwert) | 4 vCPU, 8 GB RAM, 100 GB SSD für ca. 5.000 Sensoren bei 60-s-Intervall |
 | Netzwerk | Ein freier TCP-Port für die Weboberfläche (Standard 8080). Kein Internetzugang erforderlich, sobald die Images vorhanden sind |
 
-Die Skripte unter `scripts/` sind Bash-Skripte. Unter Windows laufen sie in WSL oder Git Bash.
+Sicherung und Wiederherstellung gibt es als Bash-Skripte (`scripts/*.sh`, Linux) und als PowerShell-Skripte (`scripts/*.ps1`, Windows). Beide erzeugen dasselbe Archivformat – Sicherungen lassen sich zwischen Windows und Linux austauschen.
 
 ## Installation
 
@@ -55,13 +55,19 @@ Dann `docker compose up -d --build` bzw. unter Windows `.\start-nexus.ps1`. Beim
 
 Die Demo-Benutzer (m.berger, j.keller …) haben kein Passwort und können sich nicht anmelden.
 
-### Passwort setzen oder zurücksetzen
+### Benutzer und Passwörter
+
+- **Administration → Benutzer & Rollen** (nur Administratoren): Benutzer anlegen, Name/E-Mail/Rolle ändern, deaktivieren, löschen, Passwort setzen. Deaktivieren und Passwort setzen beenden bestehende Anmeldungen des Benutzers. Das eigene Konto kann weder deaktiviert noch herabgestuft oder gelöscht werden.
+- **Eigenes Passwort:** auf den eigenen Anmeldenamen oben rechts klicken. Andere Anmeldungen desselben Kontos werden dabei beendet.
+- Passwörter: mindestens 10 Zeichen.
+
+Passwort ohne Oberfläche setzen (z. B. Administrator-Passwort vergessen):
 
 ```bash
 docker compose exec backend python -m app.cli set-password admin
 ```
 
-Das Passwort wird verdeckt abgefragt (mindestens 10 Zeichen), bestehende Sitzungen des Benutzers werden beendet. So lässt sich auch ein Demo-Benutzer anmeldefähig machen.
+Das Passwort wird verdeckt abgefragt, bestehende Sitzungen des Benutzers werden beendet.
 
 ### Rollen
 
@@ -137,7 +143,11 @@ Zustand anzeigen: `docker compose ps` oder `docker inspect --format '{{.State.He
 ## Datensicherung
 
 ```bash
-./scripts/backup.sh
+./scripts/backup.sh               # Linux
+```
+
+```powershell
+.\scripts\backup.ps1               # Windows (PowerShell 5.1 oder 7)
 ```
 
 Erzeugt `backups/nexus-<zeitstempel>.tar.gz` mit:
@@ -152,7 +162,8 @@ Aufbewahrung über `NEXUS_BACKUP_KEEP`. Für tägliche Sicherung z. B. per cron:
 15 2 * * *  cd /opt/nexus-monitor && ./scripts/backup.sh >> backups/backup.log 2>&1
 ```
 
-Unter Windows entsprechend über die Aufgabenplanung mit `wsl` oder Git Bash.
+Unter Windows über die Aufgabenplanung, z. B. Aktion `powershell.exe` mit Argumenten
+`-NoProfile -ExecutionPolicy Bypass -File C:\install\nexus-monitor\nexus-monitor\scripts\backup.ps1` und „Starten in“ = Projektordner.
 
 ## Wiederherstellung und Umzug auf einen anderen Server
 
@@ -160,7 +171,10 @@ Unter Windows entsprechend über die Aufgabenplanung mit `wsl` oder Git Bash.
 2. Sicherungsarchiv kopieren.
 3. Wiederherstellen:
    ```bash
-   ./scripts/restore.sh backups/nexus-<zeitstempel>.tar.gz
+   ./scripts/restore.sh backups/nexus-<zeitstempel>.tar.gz          # Linux
+   ```
+   ```powershell
+   .\scripts\restore.ps1 .\backups\nexus-<zeitstempel>.tar.gz        # Windows
    ```
    Das Skript übernimmt `.env`, startet die Datenbank, hält das Backend an, legt die Datenbank neu an, spielt den Dump ein (mit TimescaleDB: `timescaledb_pre_restore()` / `timescaledb_post_restore()`) und startet alle Dienste.
    Ziel- und Quellserver sollten dieselbe TimescaleDB-Version verwenden (`TIMESCALEDB_VERSION` in `.env`).

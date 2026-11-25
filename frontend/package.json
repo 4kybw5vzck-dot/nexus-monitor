@@ -1,7 +1,7 @@
 {
   "name": "nexus-monitor-frontend",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "NEXUS Monitor – Web-Frontend (Phase 1: Mock-Daten)",
   "type": "module",
   "scripts": {

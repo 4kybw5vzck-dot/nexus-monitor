@@ -20,6 +20,10 @@ export const dataSource = createDataSource();
 /** HTTP-Datenquelle (für Anmeldung/Abmeldung) – im Mock-Modus undefined. */
 export const httpDataSource = dataSource instanceof HttpDataSource ? dataSource : undefined;
 
+/** Verwaltungsfunktionen – nur mit Backend, im Mock-Modus undefined. */
+export const management = httpDataSource?.management;
+
 export type { MonitoringDataSource } from './dataSource';
 export { ApiError } from './httpDataSource';
+export type { ManagementApi, UserInput, Role } from './management';
 export * from './types';
