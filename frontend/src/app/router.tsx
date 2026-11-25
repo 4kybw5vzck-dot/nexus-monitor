@@ -20,9 +20,15 @@ function readLocation(): Location {
 
 export function navigate(to: string, options: { replace?: boolean } = {}) {
   const target = `#${to.startsWith('/') ? to : `/${to}`}`;
-  if (options.replace) window.history.replaceState(null, '', target);
-  else window.history.pushState(null, '', target);
-  window.dispatchEvent(new HashChangeEvent('hashchange'));
+  try {
+    if (options.replace) window.history.replaceState(null, '', target);
+    else window.history.pushState(null, '', target);
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
+  } catch {
+    // Manche eingebetteten Umgebungen (z. B. sandboxed iframes) erlauben die
+    // History-API nicht – dann direkt über den Hash navigieren.
+    window.location.hash = target;
+  }
 }
 
 /** Setzt einzelne Query-Parameter, ohne einen neuen History-Eintrag zu erzeugen. */
