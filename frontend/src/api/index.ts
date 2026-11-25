@@ -25,5 +25,5 @@ export const management = httpDataSource?.management;
 
 export type { MonitoringDataSource } from './dataSource';
 export { ApiError } from './httpDataSource';
-export type { ManagementApi, UserInput, Role } from './management';
+export type { ManagementApi, UserInput, Role, CredentialProfileInput, SiteInput, DeviceInput, SensorInput } from './management';
 export * from './types';

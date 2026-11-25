@@ -20,6 +20,9 @@ if not TEST_DB_URL:
 ADMIN_PASSWORD = "Admin-Test-Passwort-1"
 OPERATOR_PASSWORD = "Operator-Test-Passwort-1"
 READER_PASSWORD = "Reader-Test-Passwort-1"
+SECRET_KEY = "test-geheimschluessel-0123456789"
+COLLECTOR_TOKEN = "test-collector-token-0123456789"
+COLLECTOR = {"X-Collector-Token": COLLECTOR_TOKEN}
 
 
 def _reset_database() -> None:
@@ -40,6 +43,9 @@ def app():
         NEXUS_ADMIN_LOGIN="admin",
         NEXUS_ADMIN_PASSWORD=ADMIN_PASSWORD,
         NEXUS_RUN_MIGRATIONS="true",
+        NEXUS_SECRET_KEY=SECRET_KEY,
+        NEXUS_COLLECTOR_TOKEN=COLLECTOR_TOKEN,
+        NEXUS_STALE_CHECK_SEC="0",
     )
     from app.config import get_settings
     from app.db import reset_engine

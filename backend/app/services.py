@@ -50,12 +50,17 @@ def _now(db: Session) -> datetime:
 # Geräte
 # ---------------------------------------------------------------------------
 
+# Effektiver Sensorstatus: pausierte Geräte/Sensoren zählen als "paused"
+EFFECTIVE_STATUS_SQL = "CASE WHEN d.paused OR se.paused THEN 'paused' ELSE se.status END"
+
+
 def list_devices(db: Session, device_id: str | None = None) -> list[s.Device]:
-    rank = _RANK_SQL.format(col="se.status")
+    rank = _RANK_SQL.format(col=f"({EFFECTIVE_STATUS_SQL})")
     sql = f"""
         SELECT d.id, d.name, d.ip, d.type, d.vendor, d.model, d.os, d.site_id, d.tags, d.description,
                d.boot_time, d.created_at, d.polling_interval_sec, d.protocol, d.notification_group,
-               d.maintenance_window, cp.name AS credential_profile,
+               d.maintenance_window, d.credential_profile_id, d.collector_id, d.paused, d.is_demo,
+               cp.name AS credential_profile,
                count(se.id) AS sensor_count, max({rank}) AS worst_rank, max(se.last_check) AS last_contact,
                now() AS now
         FROM devices d
@@ -80,8 +85,12 @@ def list_devices(db: Session, device_id: str | None = None) -> list[s.Device]:
                 config=s.DeviceConfig(
                     polling_interval_sec=r["polling_interval_sec"], protocol=r["protocol"],
                     credential_profile=r["credential_profile"] or "",
+                    credential_profile_id=r["credential_profile_id"],
                     notification_group=r["notification_group"], maintenance_window=r["maintenance_window"],
+                    collector_id=r["collector_id"],
                 ),
+                paused=r["paused"],
+                is_demo=r["is_demo"],
             )
         )
     return result
@@ -95,10 +104,12 @@ def sensor_to_api(x: m.Sensor) -> s.Sensor:
     thresholds = None
     if x.warning_threshold is not None and x.critical_threshold is not None:
         thresholds = s.Thresholds(warning=x.warning_threshold, critical=x.critical_threshold, inverted=x.inverted)
+    paused = x.paused or x.device.paused
     return s.Sensor(
-        id=x.id, device_id=x.device_id, name=x.name, type=x.type, status=x.status, value=x.value, unit=x.unit,
-        display_value=x.display_value, last_check=x.last_check, interval_sec=x.interval_sec,
-        thresholds=thresholds, message=x.message,
+        id=x.id, device_id=x.device_id, name=x.name, type=x.type, status="paused" if paused else x.status,
+        value=x.value, unit=x.unit, display_value=x.display_value, last_check=x.last_check,
+        interval_sec=x.interval_sec, thresholds=thresholds, message=x.message,
+        settings=x.settings or {}, paused=x.paused, status_since=x.status_since,
     )
 
 
@@ -151,7 +162,10 @@ def aggregate_series(db: Session, metric: str, hours: int) -> list[s.MetricPoint
 
 
 def availability(db: Session, hours: int) -> list[s.Availability]:
-    """Verfügbarkeit je Gerät: Anteil der Intervalle, deren Ping-Mittelwert nicht kritisch ist."""
+    """Verfügbarkeit je Gerät aus dem Ping-Sensor: je Intervall der Anteil der Messungen
+    über der kritischen Schwelle (Ausfall), gemittelt über alle Intervalle. So zählt ein
+    einzelner Ausfall auch dann, wenn ein Intervall mehrere Messungen enthält, und
+    unterschiedlich dichte Daten (Demo-Datensatz) werden gleich gewichtet."""
     step = step_minutes_for(hours)
     rows = db.execute(
         text(f"""
@@ -159,19 +173,18 @@ def availability(db: Session, hours: int) -> list[s.Availability]:
                 SELECT DISTINCT ON (device_id) id, device_id, critical_threshold AS crit, inverted
                 FROM sensors WHERE type = 'ping' ORDER BY device_id, id
             ), buckets AS (
-                SELECT p.device_id, p.crit, p.inverted,
-                       date_bin(make_interval(mins => :step), ms.time, {_ORIGIN}) AS b, avg(ms.value) AS v
+                SELECT p.device_id,
+                       date_bin(make_interval(mins => :step), ms.time, {_ORIGIN}) AS b,
+                       avg(CASE
+                           WHEN p.crit IS NULL THEN 0
+                           WHEN p.inverted AND ms.value <= p.crit THEN 1
+                           WHEN NOT p.inverted AND ms.value >= p.crit THEN 1
+                           ELSE 0 END) AS down
                 FROM ping p JOIN measurements ms ON ms.sensor_id = p.id
                 WHERE ms.time > now() - make_interval(hours => :hours)
-                GROUP BY p.device_id, p.crit, p.inverted, b
+                GROUP BY p.device_id, b
             ), per_device AS (
-                SELECT device_id,
-                       100.0 - 100.0 * avg(CASE
-                           WHEN crit IS NULL THEN 0
-                           WHEN inverted AND v <= crit THEN 1
-                           WHEN NOT inverted AND v >= crit THEN 1
-                           ELSE 0 END) AS availability
-                FROM buckets GROUP BY device_id
+                SELECT device_id, 100.0 - 100.0 * avg(down) AS availability FROM buckets GROUP BY device_id
             )
             SELECT d.id, d.site_id, coalesce(pd.availability, 100) AS availability
             FROM devices d LEFT JOIN per_device pd ON pd.device_id = d.id
@@ -184,7 +197,10 @@ def availability(db: Session, hours: int) -> list[s.Availability]:
 
 def summary(db: Session) -> s.StatusSummary:
     by_status = {k: 0 for k in STATUS_RANK}
-    for status, n in db.execute(select(m.Sensor.status, func.count()).group_by(m.Sensor.status)).all():
+    rows = db.execute(text(f"""
+        SELECT {EFFECTIVE_STATUS_SQL} AS st, count(*) FROM sensors se JOIN devices d ON d.id = se.device_id GROUP BY st
+    """)).all()
+    for status, n in rows:
         by_status[status] = n
     devices = db.scalar(select(func.count()).select_from(m.Device)) or 0
     ping_devices = set(db.scalars(select(m.Sensor.device_id).where(m.Sensor.type == "ping")).all())
@@ -237,21 +253,32 @@ def link_to_api(x: m.Link) -> s.Link:
     )
 
 
+CENTRAL_COLLECTOR_ID = "col-central"
+
+
 def list_collectors(db: Session) -> list[s.Collector]:
-    total = db.scalar(select(func.count()).select_from(m.Sensor)) or 0
-    per_site = dict(
-        db.execute(
-            select(m.Device.site_id, func.count(m.Sensor.id)).join(m.Sensor).group_by(m.Device.site_id)
-        ).all()
-    )
+    """Sensoranzahl: Demo-Collectors wie im Mock (Demo-Sensoren am Standort bzw. alle),
+    echte Collectors nach Zuständigkeit (Gerät ohne Collector -> zentraler Collector)."""
+    demo_total = db.scalar(select(func.count(m.Sensor.id)).join(m.Device).where(m.Device.is_demo.is_(True))) or 0
+    demo_per_site = dict(db.execute(
+        select(m.Device.site_id, func.count(m.Sensor.id)).join(m.Sensor)
+        .where(m.Device.is_demo.is_(True)).group_by(m.Device.site_id)
+    ).all())
+    real_per_collector = dict(db.execute(
+        select(func.coalesce(m.Device.collector_id, CENTRAL_COLLECTOR_ID), func.count(m.Sensor.id)).join(m.Sensor)
+        .where(m.Device.is_demo.is_(False)).group_by(text("1"))
+    ).all())
     result = []
-    for c in db.scalars(select(m.Collector).order_by(m.Collector.role, m.Collector.name)).all():
-        count = total if c.role == "central" else per_site.get(c.site_id, 0)
+    for c in db.scalars(select(m.Collector).order_by(m.Collector.is_demo, m.Collector.role, m.Collector.name)).all():
+        if c.is_demo:
+            count = demo_total if c.role == "central" else demo_per_site.get(c.site_id, 0)
+        else:
+            count = real_per_collector.get(c.id, 0)
         result.append(
             s.Collector(
                 id=c.id, name=c.name, site_id=c.site_id, role=c.role, version=c.version, status=c.status,
                 last_heartbeat=c.last_heartbeat, sensor_count=count, cpu=c.cpu, memory=c.memory,
-                queue_length=c.queue_length,
+                queue_length=c.queue_length, is_demo=c.is_demo, last_error=c.last_error,
             )
         )
     return result

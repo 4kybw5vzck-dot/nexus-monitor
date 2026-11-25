@@ -6,11 +6,12 @@ import { DataTable } from '../components/ui/DataTable';
 import { Card, ErrorBox, PageHeader, Skeleton, Tabs } from '../components/ui';
 import { CheckboxField, FormModal, SelectField, TextField } from '../components/ui/Modal';
 import { currentUser, initials, useSession } from '../app/session';
+import { CredentialProfilesTab } from '../components/manage/AdminForms';
 import { Icon } from '../components/ui/Icon';
 import { useData } from '../hooks/useData';
 import { formatRelative } from '../utils/format';
 
-type Tab = 'users' | 'notifications' | 'system' | 'backup';
+type Tab = 'users' | 'credentials' | 'notifications' | 'system' | 'backup';
 
 export function AdminPage() {
   const { query } = useLocation();
@@ -23,12 +24,14 @@ export function AdminPage() {
         onChange={(t) => updateQuery({ tab: t === 'users' ? null : t })}
         tabs={[
           { id: 'users', label: 'Benutzer & Rollen' },
+          ...(management ? [{ id: 'credentials' as Tab, label: 'Zugangsprofile' }] : []),
           { id: 'notifications', label: 'Benachrichtigungen' },
           { id: 'system', label: 'System' },
           { id: 'backup', label: 'Datensicherung' },
         ]}
       />
       {tab === 'users' && <UsersTab />}
+      {tab === 'credentials' && management && <CredentialProfilesTab />}
       {tab === 'notifications' && <NotificationsTab />}
       {tab === 'system' && <SystemTab />}
       {tab === 'backup' && <BackupTab />}
@@ -213,9 +216,9 @@ function SystemTab() {
             ['Frontend (React/TypeScript)', 'vorhanden', 'ok'],
             ['Backend (Python/FastAPI)', dataSource.kind === 'http' ? 'vorhanden – aktiv' : 'vorhanden – im Mock-Modus nicht genutzt', dataSource.kind === 'http' ? 'ok' : 'paused'],
             ['PostgreSQL – Konfiguration', dataSource.kind === 'http' ? 'vorhanden – aktiv' : 'vorhanden – im Mock-Modus nicht genutzt', dataSource.kind === 'http' ? 'ok' : 'paused'],
-            ['TimescaleDB – Messwerte', 'vorhanden – Messwerte aus Demo-Datensatz', dataSource.kind === 'http' ? 'ok' : 'paused'],
-            ['Monitoring-Engine (SNMP, ICMP, WMI …)', 'Phase 3', 'paused'],
-            ['Remote-Collectoren', 'Phase 3', 'paused'],
+            ['TimescaleDB – Messwerte', 'vorhanden', dataSource.kind === 'http' ? 'ok' : 'paused'],
+            ['Monitoring-Engine (Ping, SNMP, HTTP, DNS, SSH, WMI)', dataSource.kind === 'http' ? 'vorhanden – Collector-Container' : 'vorhanden – im Mock-Modus nicht genutzt', dataSource.kind === 'http' ? 'ok' : 'paused'],
+            ['Remote-Collectoren', 'vorhanden – Anlage unter Collectors', dataSource.kind === 'http' ? 'ok' : 'paused'],
           ].map(([name, phase, st]) => (
             <div className="list-item" key={name}>
               <span className={`dot s-${st}`} style={{ marginTop: 6 }} />

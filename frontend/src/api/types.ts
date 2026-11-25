@@ -60,8 +60,12 @@ export interface Device {
   uptimeDays: number;
   tags: string[];
   description: string;
-  /** Monitoring-Konfiguration (wird später vom Backend verwaltet) */
+  /** Monitoring-Konfiguration */
   config: DeviceConfig;
+  /** Nur Backend: Überwachung angehalten */
+  paused?: boolean;
+  /** Nur Backend: Gerät aus dem Demo-Datensatz (wird nie abgefragt) */
+  isDemo?: boolean;
 }
 
 export interface DeviceConfig {
@@ -69,8 +73,11 @@ export interface DeviceConfig {
   protocol: 'SNMP v3' | 'SNMP v2c' | 'WMI' | 'SSH' | 'ICMP' | 'API';
   /** Verweis auf hinterlegte Zugangsdaten – niemals die Zugangsdaten selbst */
   credentialProfile: string;
+  credentialProfileId?: number | null;
   notificationGroup: string;
   maintenanceWindow: string | null;
+  /** Zuständiger Collector (leer = zentraler Collector) */
+  collectorId?: string | null;
 }
 
 export interface Thresholds {
@@ -92,8 +99,12 @@ export interface Sensor {
   displayValue?: string;
   lastCheck: string;
   intervalSec: number;
-  thresholds?: Thresholds;
+  thresholds?: Thresholds | null;
   message: string;
+  /** Nur Backend: Prüfungsparameter (z. B. interface, url, path) */
+  settings?: Record<string, unknown>;
+  paused?: boolean;
+  statusSince?: string | null;
 }
 
 export interface MetricPoint {
@@ -152,6 +163,8 @@ export interface Collector {
   cpu: number;
   memory: number;
   queueLength: number;
+  isDemo?: boolean;
+  lastError?: string | null;
 }
 
 export interface User {
@@ -200,4 +213,49 @@ export interface StatusSummary {
   /** Verfügbarkeit aller Ping-Sensoren der letzten 24 h in Prozent */
   availability: number;
   activeAlerts: number;
+}
+
+/** Zugangsprofil (Backend). Geheime Felder werden nie ausgeliefert, nur als true/false. */
+export interface CredentialProfile {
+  id: number;
+  name: string;
+  protocol: DeviceConfig['protocol'];
+  description: string;
+  hasSecret: boolean;
+  /** false: gespeicherte Daten passen nicht zum aktuellen NEXUS_SECRET_KEY */
+  readable: boolean;
+  fields: Record<string, unknown>;
+  deviceCount: number;
+}
+
+export interface CredentialField {
+  key: string;
+  label: string;
+  secret?: boolean;
+  required?: boolean;
+  default?: unknown;
+  options?: string[];
+  type?: 'bool';
+  multiline?: boolean;
+}
+
+export interface SensorTypeSpec {
+  label: string;
+  name: string;
+  unit: string;
+  intervalSec: number;
+  thresholds: Thresholds | null;
+  /** null = unabhängig vom Geräteprotokoll */
+  methods: string[] | null;
+  settings: Record<string, unknown>;
+  required: string[];
+}
+
+/** Katalog aus GET /api/catalog */
+export interface Catalog {
+  sensorTypes: Record<SensorType, SensorTypeSpec>;
+  protocolMethod: Record<DeviceConfig['protocol'], string | null>;
+  credentialFields: Partial<Record<DeviceConfig['protocol'], CredentialField[]>>;
+  dnsRecordTypes: string[];
+  defaultSensors: Record<DeviceConfig['protocol'], Array<{ type: SensorType; name: string }>>;
 }

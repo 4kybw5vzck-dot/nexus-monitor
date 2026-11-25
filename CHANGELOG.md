@@ -42,3 +42,13 @@
 - **PowerShell-Skripte** `scripts/backup.ps1` und `scripts/restore.ps1` (Windows PowerShell 5.1 und 7), gleiches Archivformat wie die Bash-Skripte. Der Dump wird per `docker compose cp` übertragen (keine Umleitung von Binärdaten).
 - Validierungsfehler der API nennen das betroffene Feld.
 
+## 0.3.0 – Phase 3: Monitoring-Engine
+
+- **Collector** (`collector/`, eigenes Image): Ping (ohne Root), SNMP v2c/v3 (Huawei, Cisco, HOST-RESOURCES, UCD; Interface-Status, Traffic aus 64-Bit-Zählern), HTTP(S) mit Suchbegriff, DNS, Linux über SSH (Load, CPU, RAM, Dateisystem), Windows über WMI/WinRM (CPU, RAM, Laufwerk, Dienste). Lokaler Puffer (SQLite) bei Verbindungsabbruch, Nachsenden ohne Lücken.
+- **Zentrale:** Collector-Schnittstelle (`/api/collector/config`, `/api/collector/results`) mit Token; Sensorstatus aus Schwellwerten, Alarme eröffnen/nachführen/beheben, Ereignisse; Sensoren ohne Messwerte → „unbekannt“, Collector ohne Lebenszeichen → Warnung/Kritisch.
+- **Verwaltung in der Oberfläche:** Zugangsprofile (verschlüsselt mit `NEXUS_SECRET_KEY`, nie angezeigt), Geräte (mit Standard-Sensoren je Protokoll), Sensoren (typabhängige Einstellungen, Schwellwerte, Intervall), Pausieren, Standorte, Remote-Collectoren mit einmalig angezeigtem Token.
+- **Demo-Daten** sind markiert und werden nie abgefragt (Migration 0002).
+- Verfügbarkeit: Anteil ausgefallener Ping-Messungen je Intervall (zählt auch einzelne Ausfälle bei dichten Messungen).
+- Compose: Dienst `collector` (Profil `backend`), `collector/docker-compose.remote.yml` für Standorte; `start-nexus.ps1` erzeugt fehlende `NEXUS_SECRET_KEY`/`NEXUS_COLLECTOR_TOKEN`.
+- Tests: Backend 49, Collector 30 (gegen echte SNMP-, SSH-, DNS-, HTTP-Dienste; WinRM nachgebildet), Frontend 25; Ende-zu-Ende mit Backend, Collector und Browser geprüft.
+

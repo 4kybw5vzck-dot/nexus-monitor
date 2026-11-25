@@ -1,5 +1,7 @@
-import { useMemo } from 'react';
-import { dataSource, type Device, type DeviceType, type Status } from '../api';
+import { useMemo, useState } from 'react';
+import { dataSource, management, type Device, type DeviceType, type Status } from '../api';
+import { usePermissions } from '../app/session';
+import { DeviceDialog } from '../components/manage/DeviceForms';
 import { navigate, updateQuery, useLocation } from '../app/router';
 import { DataTable, type Column } from '../components/ui/DataTable';
 import { Card, PageHeader, Select, Skeleton, StatusBadge } from '../components/ui';
@@ -16,6 +18,8 @@ export function DevicesPage() {
   const status = (query.get('status') ?? '') as Status | '';
 
   const devices = useData(() => dataSource.getDevices());
+  const { canEdit } = usePermissions();
+  const [adding, setAdding] = useState(false);
   const sites = useData(() => dataSource.getSites());
   const siteName = new Map((sites.data ?? []).map((s) => [s.id, s.name]));
 
@@ -37,7 +41,7 @@ export function DevicesPage() {
       render: (d) => (
         <span className="hstack" style={{ gap: 10 }}>
           <span className="muted"><Icon name={deviceIcon(d.type)} size={17} /></span>
-          <span><b>{d.name}</b><br /><span className="muted small">{d.description}</span></span>
+          <span><b>{d.name}</b>{d.isDemo && <span className="tag" title="Aus dem Demo-Datensatz – wird nicht abgefragt" style={{ marginLeft: 6 }}>Demo</span>}<br /><span className="muted small">{d.description}</span></span>
         </span>
       ),
     },
@@ -56,8 +60,11 @@ export function DevicesPage() {
       <PageHeader
         title="Devices"
         description={devices.data ? `${rows.length} von ${devices.data.length} Geräten` : 'Geräteübersicht'}
-        actions={<button className="btn primary" onClick={() => navigate('/discovery')}><Icon name="plus" size={15} /> Gerät hinzufügen</button>}
+        actions={management
+          ? canEdit && <button className="btn primary" onClick={() => setAdding(true)}><Icon name="plus" size={15} /> Gerät hinzufügen</button>
+          : <button className="btn primary" onClick={() => navigate('/discovery')}><Icon name="plus" size={15} /> Gerät hinzufügen</button>}
       />
+      {adding && <DeviceDialog onClose={() => setAdding(false)} onCreated={(d) => navigate(`/devices/${d.id}`)} />}
       <Card flush>
         <div className="toolbar" style={{ padding: '4px 14px 12px' }}>
           <div className="grow">

@@ -2,15 +2,15 @@
 
 Eigenständige, vollständig lokal betreibbare Network-Monitoring-Plattform als langfristiger Ersatz für Paessler PRTG.
 
-> **Stand: Phase 2 – Backend und Datenbank.**
-> Oberfläche, REST-API (FastAPI), PostgreSQL/TimescaleDB und Anmeldung sind umgesetzt. Messwerte stammen noch aus einem Demo-Datensatz: Es gibt noch keine Monitoring-Engine (Phase 3), also keine SNMP-Abfragen, keine Netzwerkscans und keine Verbindung zu PRTG. Alle Geräte, Standorte, Personen und Messwerte sind fiktiv; IP-Adressen stammen ausschließlich aus den Dokumentationsbereichen nach RFC 5737.
+> **Stand: Phase 3 – Monitoring-Engine.**
+> Oberfläche, REST-API (FastAPI), PostgreSQL/TimescaleDB, Anmeldung und Benutzerverwaltung sowie echte Messungen über einen Collector: Ping, SNMP v2c/v3, HTTP, DNS, SSH (Linux) und WMI über WinRM (Windows). Geräte, Sensoren, Zugangsprofile (verschlüsselt), Standorte und Remote-Collectoren werden in der Oberfläche verwaltet. Noch offen: echte Discovery (Netzwerkscan), Benachrichtigungen, Reports aus echten Daten, PRTG-Import. Die Demo-Daten sind fiktiv (IP-Adressen nach RFC 5737) und werden nie abgefragt.
 
 Zwei Betriebsarten (Einstellung in `.env`):
 
 | Betriebsart | Inhalt |
 |---|---|
 | **Mock** (Standard) | Nur Oberfläche, Beispieldaten im Browser, keine Anmeldung |
-| **Backend** | Oberfläche + Backend + Datenbank, Anmeldung mit Rollen, Daten aus der Datenbank (optional Demo-Datensatz) |
+| **Backend** | Oberfläche + Backend + Datenbank + Collector, Anmeldung mit Rollen, echte Messungen (optional zusätzlich Demo-Datensatz) |
 
 ## Funktionsumfang der Oberfläche
 
@@ -90,13 +90,13 @@ nexus-monitor/
 ├── docker-compose.yml        Alle Dienste; Phase-2/3-Dienste über Profile vorbereitet
 ├── .env.example              Dokumentierte Konfigurationsvorlage
 ├── scripts/
-│   ├── backup.sh             Sicherung (Konfiguration + Datenbank) in ein Archiv
-│   └── restore.sh            Wiederherstellung, auch auf neuem Server
+│   ├── backup.sh/.ps1        Sicherung (Konfiguration + Datenbank) in ein Archiv
+│   └── restore.sh/.ps1       Wiederherstellung, auch auf neuem Server
 ├── docs/
 │   ├── ARCHITEKTUR.md        Zielarchitektur, Datenmodell, Schnittstellen
 │   └── BETRIEB.md            Installation, Update, Migration, Backup
 ├── backend/                  Python/FastAPI, Alembic-Migrationen, pytest (siehe backend/README.md)
-├── collector/                Phase 3: Remote-Collector (Platzhalter)
+├── collector/                Collector: Ping, SNMP, HTTP, DNS, SSH, WMI (siehe collector/README.md)
 └── frontend/
     ├── Dockerfile            Mehrstufiger Build → unprivilegierter nginx
     ├── docker/               nginx-Vorlage (inkl. /api/-Proxy), Laufzeit-Konfiguration

@@ -83,7 +83,7 @@ def seed_demo(db: Session, now: datetime | None = None) -> bool:
     for x in data["collectors"]:
         db.add(m.Collector(id=x["id"], name=x["name"], site_id=x["siteId"], role=x["role"], version=x["version"],
                            status=x["status"], last_heartbeat=_ts(x["lastHeartbeat"], shift), cpu=x["cpu"],
-                           memory=x["memory"], queue_length=x["queueLength"]))
+                           memory=x["memory"], queue_length=x["queueLength"], is_demo=True))
     db.flush()
 
     profiles: dict[str, m.CredentialProfile] = {}
@@ -104,6 +104,7 @@ def seed_demo(db: Session, now: datetime | None = None) -> bool:
             polling_interval_sec=cfg["pollingIntervalSec"], protocol=cfg["protocol"],
             credential_profile_id=profiles[cfg["credentialProfile"]].id if cfg["credentialProfile"] else None,
             notification_group=cfg["notificationGroup"], maintenance_window=cfg["maintenanceWindow"],
+            is_demo=True,
         ))
     db.flush()
 
@@ -114,6 +115,7 @@ def seed_demo(db: Session, now: datetime | None = None) -> bool:
             interval_sec=x["intervalSec"], warning_threshold=t.get("warning"), critical_threshold=t.get("critical"),
             inverted=bool(t.get("inverted", False)), status=x["status"], value=x["value"],
             display_value=x.get("displayValue"), message=x["message"], last_check=_ts(x["lastCheck"], shift),
+            status_since=_ts(x["lastCheck"], shift),
         ))
     db.flush()
 

@@ -81,3 +81,13 @@ export function initials(name: string): string {
 export function canOperate(user: User | null): boolean {
   return !!user && (user.role === 'Administrator' || user.role === 'Operator');
 }
+
+/** Rechte für Bearbeitungsfunktionen (nur mit Backend). */
+export function usePermissions(): { canEdit: boolean; isAdmin: boolean } {
+  useSession();
+  const user = current?.user ?? null;
+  return {
+    canEdit: !!user && (user.role === 'Administrator' || user.role === 'Operator'),
+    isAdmin: !!user && user.role === 'Administrator',
+  };
+}

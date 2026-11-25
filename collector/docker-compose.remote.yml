@@ -1,0 +1,32 @@
+# NEXUS Monitor – Remote-Collector für einen Standort
+#
+# Auf einem Docker-Host am Standort (Linux oder Windows mit Docker Desktop):
+#   1. Ordner "collector" aus dem Projekt dorthin kopieren
+#   2. Datei .env neben dieser Datei anlegen:
+#        NEXUS_CORE_URL=https://nexus.firma.local      (Adresse der Oberfläche/Zentrale)
+#        NEXUS_COLLECTOR_TOKEN=<Token aus Collectors → Remote-Collector anlegen>
+#        NEXUS_VERIFY_TLS=true                          (false nur bei selbst signiertem Zertifikat)
+#   3. docker compose -f docker-compose.remote.yml up -d --build
+#
+# Der Collector baut die Verbindung zur Zentrale auf – am Standort sind keine
+# eingehenden Ports nötig. Bei WAN-Ausfall puffert er die Messwerte im Volume.
+
+name: nexus-collector
+
+services:
+  collector:
+    build: .
+    image: nexus-monitor/collector:latest
+    restart: unless-stopped
+    environment:
+      NEXUS_CORE_URL: ${NEXUS_CORE_URL:?NEXUS_CORE_URL fehlt in .env}
+      NEXUS_COLLECTOR_TOKEN: ${NEXUS_COLLECTOR_TOKEN:?NEXUS_COLLECTOR_TOKEN fehlt in .env}
+      NEXUS_VERIFY_TLS: ${NEXUS_VERIFY_TLS:-true}
+      NEXUS_LOG_LEVEL: ${NEXUS_LOG_LEVEL:-INFO}
+    sysctls:
+      net.ipv4.ping_group_range: "0 2147483647"
+    volumes:
+      - buffer:/var/lib/nexus-collector
+
+volumes:
+  buffer:

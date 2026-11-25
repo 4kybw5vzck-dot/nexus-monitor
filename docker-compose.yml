@@ -81,6 +81,7 @@ services:
       NEXUS_DB_USER: ${POSTGRES_USER:-nexus}
       NEXUS_DB_PASSWORD: ${POSTGRES_PASSWORD:-}
       NEXUS_SECRET_KEY: ${NEXUS_SECRET_KEY:-}
+      NEXUS_COLLECTOR_TOKEN: ${NEXUS_COLLECTOR_TOKEN:-}
       NEXUS_ADMIN_LOGIN: ${NEXUS_ADMIN_LOGIN:-admin}
       NEXUS_ADMIN_PASSWORD: ${NEXUS_ADMIN_PASSWORD:-}
       NEXUS_SESSION_HOURS: ${NEXUS_SESSION_HOURS:-12}
@@ -99,20 +100,35 @@ services:
     # Bewusst KEIN veröffentlichter Port: Zugriff nur über den Frontend-Proxy (/api).
 
   # ---------------------------------------------------------------------------
-  # Phase 3: Remote-Collector – läuft später je Standort auf eigenem Host
+  # Zentraler Collector – führt die Messungen aus (Ping, SNMP, HTTP, DNS, SSH, WMI)
+  # und sendet die Ergebnisse an das Backend. Remote-Collectoren an anderen
+  # Standorten: collector/docker-compose.remote.yml
   # ---------------------------------------------------------------------------
-  # collector:
-  #   profiles: ["collector"]
-  #   build: ./collector
-  #   environment:
-  #     NEXUS_CORE_URL: ${NEXUS_CORE_URL}
-  #     NEXUS_COLLECTOR_TOKEN: ${NEXUS_COLLECTOR_TOKEN}
-  #   volumes:
-  #     - collector-buffer:/var/lib/nexus-collector
+  collector:
+    profiles: ["backend"]
+    build:
+      context: ./collector
+      args:
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-}
+    image: ${NEXUS_IMAGE_PREFIX:-nexus-monitor}/collector:${NEXUS_VERSION:-latest}
+    restart: unless-stopped
+    environment:
+      NEXUS_CORE_URL: http://backend:8000
+      NEXUS_COLLECTOR_TOKEN: ${NEXUS_COLLECTOR_TOKEN:-}
+      NEXUS_LOG_LEVEL: ${NEXUS_LOG_LEVEL:-INFO}
+    # Ping ohne Root-Rechte (ICMP-Datagram-Sockets für alle Gruppen erlauben)
+    sysctls:
+      net.ipv4.ping_group_range: "0 2147483647"
+    volumes:
+      - collector-buffer:/var/lib/nexus-collector
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks: [nexus]
 
 volumes:
   db-data:
-  # collector-buffer:
+  collector-buffer:
 
 networks:
   nexus:

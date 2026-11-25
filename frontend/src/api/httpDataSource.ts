@@ -16,6 +16,7 @@ import type {
 } from './types';
 import { getSession, setSession, type Session } from '../app/session';
 import type { ManagementApi, UserInput } from './management';
+import type { Catalog, CredentialProfile } from './types';
 
 /** Fehler der API mit HTTP-Status und lesbarer Meldung (Feld "detail" von FastAPI). */
 export class ApiError extends Error {
@@ -156,7 +157,37 @@ export class HttpDataSource implements MonitoringDataSource {
     setUserPassword: (id, password) => this.mutate<void>('POST', `/users/${encodeURIComponent(id)}/password`, { password }),
     deleteUser: (id) => this.mutate<void>('DELETE', `/users/${encodeURIComponent(id)}`),
     changeOwnPassword: (currentPassword, newPassword) => this.send<void>('POST', '/auth/password', { currentPassword, newPassword }),
+
+    getCatalog: () => {
+      this.catalog ??= this.get<Catalog>('/catalog').catch((e) => {
+        this.catalog = undefined;
+        throw e;
+      });
+      return this.catalog;
+    },
+    listCredentialProfiles: () => this.get<CredentialProfile[]>('/credential-profiles'),
+    createCredentialProfile: (input) => this.mutate('POST', '/credential-profiles', input),
+    updateCredentialProfile: (id, patch) => this.mutate('PATCH', `/credential-profiles/${id}`, patch),
+    deleteCredentialProfile: (id) => this.mutate('DELETE', `/credential-profiles/${id}`),
+
+    createSite: (input) => this.mutate('POST', '/sites', input),
+    updateSite: (id, patch) => this.mutate('PATCH', `/sites/${encodeURIComponent(id)}`, patch),
+    deleteSite: (id) => this.mutate('DELETE', `/sites/${encodeURIComponent(id)}`),
+
+    createDevice: (input) => this.mutate('POST', '/devices', input),
+    updateDevice: (id, patch) => this.mutate('PATCH', `/devices/${encodeURIComponent(id)}`, patch),
+    deleteDevice: (id) => this.mutate('DELETE', `/devices/${encodeURIComponent(id)}`),
+
+    createSensor: (deviceId, input) => this.mutate('POST', `/devices/${encodeURIComponent(deviceId)}/sensors`, input),
+    updateSensor: (id, patch) => this.mutate('PATCH', `/sensors/${encodeURIComponent(id)}`, patch),
+    deleteSensor: (id) => this.mutate('DELETE', `/sensors/${encodeURIComponent(id)}`),
+
+    createCollector: (name, siteId) => this.mutate('POST', '/collectors', { name, siteId }),
+    renewCollectorToken: (id) => this.mutate('POST', `/collectors/${encodeURIComponent(id)}/token`),
+    deleteCollector: (id) => this.mutate('DELETE', `/collectors/${encodeURIComponent(id)}`),
   };
+
+  private catalog?: Promise<Catalog>;
 
   // ---------- MonitoringDataSource ----------
 

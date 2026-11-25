@@ -1,0 +1,30 @@
+[project]
+name = "nexus-monitor-collector"
+version = "0.3.0"
+description = "NEXUS Monitor – Collector: Ping, SNMP, HTTP, DNS, SSH, WMI (WinRM)"
+requires-python = ">=3.10"
+dependencies = [
+  "httpx>=0.28,<1",        # Zentrale und HTTP-Sensor
+  "icmplib>=3.0,<4",       # Ping ohne Root (ICMP-Datagram-Sockets)
+  "pysnmp>=7.1,<8",        # SNMP v2c/v3
+  "dnspython>=2.9,<3",     # DNS-Sensor
+  "asyncssh>=2.24,<3",     # Linux über SSH
+  "pywinrm>=0.5,<1",       # Windows: WMI/CIM über WinRM
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=9,<10"]
+
+[project.scripts]
+nexus-collector = "nexus_collector.__main__:main"
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["nexus_collector*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

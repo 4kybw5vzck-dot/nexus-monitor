@@ -1,6 +1,6 @@
 [project]
 name = "nexus-monitor-backend"
-version = "0.2.1"
+version = "0.3.0"
 description = "NEXUS Monitor – REST-API (FastAPI) mit PostgreSQL/TimescaleDB"
 requires-python = ">=3.10"
 # Bewusst wenige Abhängigkeiten. Passwort-Hashing (scrypt) und Sitzungs-Token
@@ -13,6 +13,8 @@ dependencies = [
   "alembic>=1.20,<2",
   "pydantic>=2.14,<3",
   "pydantic-settings>=2.16,<3",
+  # Verschlüsselung der Zugangsprofile (Fernet: AES-128-CBC + HMAC-SHA256)
+  "cryptography>=50,<51",
 ]
 
 [project.optional-dependencies]

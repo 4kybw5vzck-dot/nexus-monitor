@@ -39,8 +39,12 @@ class Settings(BaseSettings):
     admin_password: str = ""
     session_hours: int = Field(default=12, ge=1, le=24 * 30)
 
-    # Für spätere Verschlüsselung von Zugangsprofilen (Phase 3)
+    # Schlüssel für die Verschlüsselung der Zugangsprofile (mind. 16 Zeichen)
     secret_key: str = ""
+    # Token des zentralen Collectors (mind. 20 Zeichen, gleicher Wert im Collector-Container)
+    collector_token: str = ""
+    # Prüfintervall für veraltete Sensoren/Collectors in Sekunden (0 = aus)
+    stale_check_sec: int = 60
 
     log_level: str = "INFO"
 

@@ -29,8 +29,10 @@ from sqlalchemy import (
     LargeBinary,
     String,
     Text,
+    UniqueConstraint,
     func,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 STATUS_VALUES = ("ok", "warning", "critical", "unknown", "paused")
@@ -85,6 +87,7 @@ class Collector(Base):
     __table_args__ = (
         _in("role", ("central", "remote"), "ck_collectors_role"),
         _in("status", STATUS_VALUES, "ck_collectors_status"),
+        UniqueConstraint("token_hash", name="uq_collectors_token_hash"),
     )
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
@@ -97,13 +100,19 @@ class Collector(Base):
     cpu: Mapped[float] = mapped_column(Double, default=0)
     memory: Mapped[float] = mapped_column(Double, default=0)
     queue_length: Mapped[int] = mapped_column(Integer, default=0)
+    # Anmeldung des Collectors an der Zentrale: nur der SHA-256-Hash des Tokens
+    token_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Demo-Collectors (aus dem Demo-Datensatz) melden sich nie
+    is_demo: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class CredentialProfile(Base):
     """Zugangsprofil. Geräte verweisen nur auf das Profil, nie auf Zugangsdaten.
 
-    `secret_ciphertext` nimmt ab Phase 3 die mit NEXUS_SECRET_KEY verschlüsselten
-    Zugangsdaten auf. Die API gibt diese Spalte niemals aus.
+    `secret_ciphertext` enthält die mit NEXUS_SECRET_KEY verschlüsselten Zugangsdaten
+    (Fernet, JSON). Die API gibt sie nie aus; nur ein angemeldeter Collector erhält
+    sie entschlüsselt für die Geräte, die er abfragt.
     """
 
     __tablename__ = "credential_profiles"
@@ -112,6 +121,7 @@ class CredentialProfile(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(200), unique=True)
     protocol: Mapped[str] = mapped_column(String(16))
+    description: Mapped[str] = mapped_column(Text, default="", server_default="")
     secret_ciphertext: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     created_at: Mapped[datetime] = mapped_column(TS, server_default=func.now())
 
@@ -144,6 +154,13 @@ class Device(Base):
     )
     notification_group: Mapped[str] = mapped_column(String(200), default="")
     maintenance_window: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    # Zuständiger Collector; leer = zentraler Collector
+    collector_id: Mapped[str | None] = mapped_column(
+        ForeignKey("collectors.id", ondelete="SET NULL", name="fk_devices_collector"), nullable=True
+    )
+    paused: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    # Demo-Geräte (RFC-5737-Adressen) werden nie abgefragt
+    is_demo: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     created_at: Mapped[datetime] = mapped_column(TS, server_default=func.now())
 
     credential_profile: Mapped[CredentialProfile | None] = relationship(lazy="joined")
@@ -168,12 +185,18 @@ class Sensor(Base):
     warning_threshold: Mapped[float | None] = mapped_column(Double, nullable=True)
     critical_threshold: Mapped[float | None] = mapped_column(Double, nullable=True)
     inverted: Mapped[bool] = mapped_column(Boolean, default=False)
-    # Letzter Zustand (ab Phase 3 von der Monitoring-Engine geschrieben)
+    # Prüfungsparameter je Sensortyp, z. B. {"interface": "GE0/0/1"} oder {"url": "https://…"}
+    settings: Mapped[dict] = mapped_column(JSONB, default=dict, server_default="{}")
+    paused: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    # Letzter Zustand (vom Collector geliefert)
     status: Mapped[str] = mapped_column(String(16), default="unknown")
     value: Mapped[float] = mapped_column(Double, default=0)
     display_value: Mapped[str | None] = mapped_column(String(300), nullable=True)
     message: Mapped[str] = mapped_column(Text, default="")
     last_check: Mapped[datetime | None] = mapped_column(TS, nullable=True)
+    # Seit wann der aktuelle Status gilt
+    status_since: Mapped[datetime | None] = mapped_column(TS, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(TS, server_default=func.now())
 
     device: Mapped[Device] = relationship(back_populates="sensors")
 
@@ -210,6 +233,7 @@ class Alert(Base):
         _in("severity", ALERT_SEVERITIES, "ck_alerts_severity"),
         _in("state", ALERT_STATES, "ck_alerts_state"),
         Index("ix_alerts_state_raised", "state", "raised_at"),
+        Index("ix_alerts_sensor_state", "sensor_id", "state"),
     )
 
     id: Mapped[str] = mapped_column(String(120), primary_key=True)

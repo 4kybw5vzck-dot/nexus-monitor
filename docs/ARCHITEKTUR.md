@@ -28,7 +28,7 @@
 |---|---|---|
 | 1 | Frontend mit Mock-Daten, Containerstruktur vorbereitet | **umgesetzt** |
 | 2 | Backend (FastAPI), Datenbankschema, Authentifizierung, `HttpDataSource` | **umgesetzt** (Messwerte vorerst Demo-Datensatz) |
-| 3 | Monitoring-Engine: ICMP, SNMP, WMI, SSH, HTTP, DNS; Remote-Collector | geplant |
+| 3 | Monitoring-Engine: ICMP, SNMP, WMI (WinRM), SSH, HTTP, DNS; Remote-Collector | **umgesetzt** (echte Discovery folgt) |
 | 4 | Alarmierung, Reporting, erweiterte Netzwerkkarten | geplant |
 | 5 | Import der PRTG-Konfiguration und relevanter Historie | geplant |
 | 6 | Parallelbetrieb und Ablösung von PRTG | geplant |
@@ -102,6 +102,11 @@ Die Endpunkte bilden das Interface `MonitoringDataSource` ab:
 | POST | `/api/discovery` | `runDiscovery()` – **simuliert**, kein Netzwerkzugriff | Operator, Administrator |
 | POST | `/api/auth/login`, `/api/auth/logout`; GET `/api/auth/me` | Anmeldung | – |
 | GET | `/api/health` | Healthcheck | – |
+| POST/PATCH/DELETE | `/api/devices`, `/api/devices/{id}/sensors`, `/api/sensors/{id}` | Geräte und Sensoren verwalten | Operator, Administrator |
+| GET/POST/PATCH/DELETE | `/api/credential-profiles`, `/api/sites`, `/api/collectors` (+ `/token`) | Zugangsprofile, Standorte, Collectors | Lesen angemeldet, Ändern Administrator |
+| POST/PATCH/DELETE | `/api/users`, `/api/users/{id}/password`; POST `/api/auth/password` | Benutzer, Passwörter | Administrator bzw. selbst |
+| GET | `/api/catalog` | Sensortypen, Standardwerte, Felder der Zugangsprofile | angemeldet |
+| GET/POST | `/api/collector/config`, `/api/collector/results` | Collector-Schnittstelle | Collector-Token |
 
 Zeitstempel: ISO 8601 in UTC mit `Z`. Feldnamen wie in `types.ts` (camelCase im JSON). Fehler: `{"detail": "<deutsche Meldung>"}`. OpenAPI-Beschreibung unter `/api/docs`.
 
@@ -115,6 +120,22 @@ Zeitstempel: ISO 8601 in UTC mit `Z`. Feldnamen wie in `types.ts` (camelCase im 
 - Verfügbarkeit: Anteil der Intervalle, deren Ping-Mittelwert unter der kritischen Schwelle liegt.
 - WAN-Traffic ein/aus: Summe der Sensoren „Traffic WAN“, vorläufig im Verhältnis 68/32 aufgeteilt wie im Mock – bis die Monitoring-Engine getrennte Kanäle liefert (Phase 3).
 
+## Collector (Phase 3)
+
+Ein Python-Paket (`collector/`), ein Image für zentralen und Remote-Collector. Details: `collector/README.md`.
+
+| Schritt | Schnittstelle |
+|---|---|
+| Anmeldung | Header `X-Collector-Token`; in der Zentrale nur SHA-256-Hash (`collectors.token_hash`). Zentraler Collector: `NEXUS_COLLECTOR_TOKEN`, Remote-Collector: Token aus der Oberfläche |
+| Konfiguration | `GET /api/collector/config` – eigene Geräte (Gerät ohne Collector → zentraler Collector `col-central`), nicht pausiert, keine Demo-Geräte; Zugangsdaten entschlüsselt |
+| Ergebnisse | `POST /api/collector/results` – bis 5000 je Anfrage, idempotent (`measurements` PK sensor_id+time), dazu Status des Collectors (Version, CPU, RAM, Puffer, letzter Fehler) |
+
+Auswertung in der Zentrale (`backend/app/collector_api.py`): neuester Wert wird Sensorstatus (Schwellwerte), ältere gepufferte Werte landen nur im Verlauf. Statuswechsel nach Warnung/Kritisch eröffnet einen Alarm (einer je Sensor, Schwere wird nachgeführt), Rückkehr zu OK behebt ihn; Ereignisse für jeden Wechsel. Ping-Ausfälle werden als Messpunkt über der kritischen Schwelle gespeichert, damit die Verfügbarkeit stimmt. Ein Hintergrundjob setzt Sensoren ohne Messwert seit 3 × Intervall + 2 Min. auf „unbekannt“ und Collectors ohne Lebenszeichen auf Warnung (3 Min.) bzw. Kritisch (10 Min.).
+
+**Verfügbarkeit:** je Intervall der Anteil ausgefallener Ping-Messungen, gemittelt über alle Intervalle.
+
+**Entscheidung WMI über WinRM:** gleiche WMI/CIM-Klassen, aber über WS-Management (pywinrm, NTLM) statt DCOM. DCOM aus einem Linux-Container bräuchte impacket, das Virenscanner oft als Angriffswerkzeug melden. Klassisches DCOM kann später als eigene Prüfung ergänzt werden.
+
 ## Datenmodell
 
 Tabellen: `sites`, `collectors`, `devices`, `sensors`, `measurements`, `links`, `alerts`, `events`, `users`, `auth_sessions`, `credential_profiles`, `notification_rules`, `reports`.
@@ -122,7 +143,8 @@ Tabellen: `sites`, `collectors`, `devices`, `sensors`, `measurements`, `links`, 
 - **Messwerte:** `measurements(sensor_id, time, value)`, Primärschlüssel `(sensor_id, time)`. Ist TimescaleDB verfügbar, macht die Migration daraus eine Hypertable (Chunks je Tag) mit Kompression ab 7 Tagen (segmentiert nach Sensor). Ohne TimescaleDB bleibt es eine normale Tabelle.
 - **Schwellwerte** stehen direkt am Sensor (`warning_threshold`, `critical_threshold`, `inverted`) – 1:1, daher keine eigene Tabelle.
 - **Rollen** sind ein fester Wertebereich (CHECK-Constraint): Administrator, Operator, Nur Lesen.
-- **Zugangsprofile:** Geräte verweisen auf `credential_profiles`. Die Spalte `secret_ciphertext` nimmt ab Phase 3 die mit `NEXUS_SECRET_KEY` verschlüsselten Zugangsdaten auf und wird von der API nie ausgegeben.
+- **Zugangsprofile:** Geräte verweisen auf `credential_profiles`. `secret_ciphertext` enthält die Zugangsdaten als JSON, verschlüsselt mit Fernet (Schlüssel per HKDF aus `NEXUS_SECRET_KEY`). Die API gibt nur nicht geheime Felder (Benutzer, Port) aus; Klartext erhält nur ein angemeldeter Collector.
+- **Phase 3 (Migration 0002):** `devices.collector_id/paused/is_demo`, `sensors.settings` (JSONB, Prüfparameter)/`paused`/`status_since`, `collectors.token_hash/is_demo/last_error`, `credential_profiles.description`.
 - Wertebereiche (Gerätetyp, Sensortyp, Status …) sind per CHECK-Constraint abgesichert.
 
 Geplant, sobald die Datenmenge es erfordert: Continuous Aggregates (5 Min. / 1 Std. / 1 Tag) und Aufbewahrungsregeln je Auflösung.

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
-import { dataSource, type Alert, type Device, type Sensor } from '../api';
-import { Link, updateQuery, useLocation } from '../app/router';
+import { dataSource, management, type Alert, type Device, type Sensor } from '../api';
+import { usePermissions } from '../app/session';
+import { ConfirmDelete, DeviceDialog, SensorDialog } from '../components/manage/DeviceForms';
+import { Link, navigate, updateQuery, useLocation } from '../app/router';
 import { Sparkline } from '../components/charts/SmallCharts';
 import { SensorDetail } from '../components/SensorDetail';
 import { AlertList, EventList, sensorValueText } from '../components/shared';
@@ -37,11 +39,12 @@ export function DeviceDetailPage({ id }: { id: string }) {
     <>
       <PageHeader
         breadcrumb={[{ label: 'Devices', to: '/devices' }, { label: site.data?.name ?? '…', to: `/devices?site=${d.siteId}` }, { label: d.name }]}
+        actions={<DeviceActions device={device.data} />}
         title={
           <span className="device-hero">
             <span className="device-icon"><Icon name={deviceIcon(d.type)} size={24} /></span>
             <span>
-              <span className="hstack" style={{ gap: 10 }}>{d.name} <StatusBadge status={d.status} /></span>
+              <span className="hstack" style={{ gap: 10 }}>{d.name} <StatusBadge status={d.status} />{d.isDemo && <span className="tag" title="Aus dem Demo-Datensatz – wird nicht abgefragt">Demo</span>}</span>
               <span className="muted small" style={{ fontWeight: 400 }}>
                 <span className="mono">{d.ip}</span> · {DEVICE_TYPE_LABEL[d.type]} · {d.vendor} {d.model}
               </span>
@@ -66,6 +69,33 @@ export function DeviceDetailPage({ id }: { id: string }) {
     </>
   );
 
+}
+
+function DeviceActions({ device }: { device: Device }) {
+  const { canEdit } = usePermissions();
+  const [dialog, setDialog] = useState<'edit' | 'delete' | null>(null);
+  const [busy, setBusy] = useState(false);
+  if (!management || !canEdit) return null;
+  return (
+    <div className="hstack">
+      <button className="btn" onClick={() => setDialog('edit')}>Bearbeiten</button>
+      <button className="btn" disabled={busy} onClick={async () => {
+        setBusy(true);
+        try { await management!.updateDevice(device.id, { paused: !device.paused }); } finally { setBusy(false); }
+      }}>{device.paused ? 'Fortsetzen' : 'Pausieren'}</button>
+      <button className="btn" onClick={() => setDialog('delete')}>Löschen</button>
+      {dialog === 'edit' && <DeviceDialog device={device} onClose={() => setDialog(null)} />}
+      {dialog === 'delete' && (
+        <ConfirmDelete title="Gerät löschen" onClose={() => setDialog(null)} onConfirm={async () => {
+          await management!.deleteDevice(device.id);
+          navigate('/devices');
+        }}>
+          <div>Gerät <b>{device.name}</b> mit {device.sensorCount} Sensoren, allen Messwerten, Alarmen und Ereignissen wird gelöscht.</div>
+          <div className="muted small">Alternative: „Pausieren“ – dann bleibt der Verlauf erhalten.</div>
+        </ConfirmDelete>
+      )}
+    </div>
+  );
 }
 
 function Overview({ device, sensors, siteName, openAlerts }: { device: Device; sensors: Sensor[]; siteName?: string; openAlerts: Alert[] }) {
@@ -118,18 +148,38 @@ function SensorSpark({ sensor }: { sensor: Sensor }) {
 
 function SensorsTab({ device, sensors, selected }: { device: Device; sensors?: Sensor[]; selected: string | null }) {
   const current = sensors?.find((s) => s.id === selected);
+  const { canEdit } = usePermissions();
+  const [dialog, setDialog] = useState<{ kind: 'add' } | { kind: 'edit'; sensor: Sensor } | { kind: 'delete'; sensor: Sensor } | null>(null);
   const columns: Column<Sensor>[] = [
     { key: 'status', header: 'Status', render: (s) => <StatusBadge status={s.status} />, sortValue: (s) => -statusSeverity(s.status), width: 120 },
     { key: 'name', header: 'Sensor', render: (s) => <b>{s.name}</b>, sortValue: (s) => s.name },
     { key: 'type', header: 'Typ', render: (s) => SENSOR_TYPE_LABEL[s.type], sortValue: (s) => s.type },
     { key: 'value', header: 'Messwert', render: (s) => <span className="tabular">{sensorValueText(s)}</span>, sortValue: (s) => s.value, align: 'right' },
     { key: 'msg', header: 'Meldung', render: (s) => <span className="muted">{s.message}</span> },
-    { key: 'last', header: 'Letzte Messung', render: (s) => <span className="muted">{formatRelative(s.lastCheck)}</span>, sortValue: (s) => s.lastCheck },
+    { key: 'last', header: 'Letzte Messung', render: (s) => <span className="muted">{s.lastCheck ? formatRelative(s.lastCheck) : '–'}</span>, sortValue: (s) => s.lastCheck ?? '' },
+    ...(management && canEdit ? [{
+      key: 'actions', header: '',
+      render: (s: Sensor) => (
+        <div className="row-actions" onClick={(e) => e.stopPropagation()}>
+          <button className="btn small ghost" onClick={() => setDialog({ kind: 'edit', sensor: s })}>Bearbeiten</button>
+          <button className="btn small ghost" onClick={() => void management!.updateSensor(s.id, { paused: !s.paused })}>{s.paused ? 'Fortsetzen' : 'Pausieren'}</button>
+          <button className="btn small ghost" onClick={() => setDialog({ kind: 'delete', sensor: s })}>Löschen</button>
+        </div>
+      ),
+    }] : []),
   ];
   return (
     <>
       {current && <SensorDetail sensor={current} onClose={() => updateQuery({ sensor: null })} />}
-      <Card flush>
+      {dialog?.kind === 'add' && <SensorDialog device={device} onClose={() => setDialog(null)} />}
+      {dialog?.kind === 'edit' && <SensorDialog device={device} sensor={dialog.sensor} onClose={() => setDialog(null)} />}
+      {dialog?.kind === 'delete' && (
+        <ConfirmDelete title="Sensor löschen" onClose={() => setDialog(null)} onConfirm={() => management!.deleteSensor(dialog.sensor.id)}>
+          Sensor <b>{dialog.sensor.name}</b> mit allen Messwerten und Alarmen wird gelöscht.
+        </ConfirmDelete>
+      )}
+      <Card flush actions={management && canEdit && <button className="btn small" onClick={() => setDialog({ kind: 'add' })}><Icon name="plus" size={14} /> Sensor hinzufügen</button>}
+        title={management && canEdit ? 'Sensoren' : undefined}>
         {sensors ? (
           <DataTable rows={sensors} columns={columns} rowKey={(s) => s.id} onRowClick={(s) => updateQuery({ sensor: s.id })} initialSort={{ key: 'status', dir: 'asc' }} />
         ) : <Skeleton height={200} />}
@@ -176,6 +226,46 @@ function HistoryTab({ device }: { device: Device }) {
 }
 
 function ConfigTab({ device }: { device: Device }) {
+  if (management) return <RealConfig device={device} />;
+  return <DemoConfig device={device} />;
+}
+
+function RealConfig({ device }: { device: Device }) {
+  const { canEdit } = usePermissions();
+  const [editing, setEditing] = useState(false);
+  const collectors = useData(() => dataSource.getCollectors());
+  const collector = (collectors.data ?? []).find((c) => c.id === (device.config.collectorId ?? 'col-central'));
+  return (
+    <div className="grid grid-main-side">
+      <Card title="Monitoring-Konfiguration" actions={canEdit && <button className="btn small" onClick={() => setEditing(true)}>Bearbeiten</button>}>
+        <dl className="kv">
+          <dt>Abfrage-Protokoll</dt><dd>{device.config.protocol}</dd>
+          <dt>Zugangsprofil</dt><dd>{device.config.credentialProfile || <span className="muted">– keines –</span>}</dd>
+          <dt>Collector</dt><dd>{collector?.name ?? 'Zentraler Collector'}</dd>
+          <dt>Überwachung</dt><dd>{device.isDemo ? 'Demo-Gerät – wird nicht abgefragt' : device.paused ? 'pausiert' : 'aktiv'}</dd>
+          <dt>Benachrichtigungsgruppe</dt><dd>{device.config.notificationGroup || '–'}</dd>
+          <dt>Wartungsfenster</dt><dd>{device.config.maintenanceWindow ?? '–'}</dd>
+        </dl>
+        <div className="muted small" style={{ marginTop: 12 }}>Intervalle und Schwellwerte werden je Sensor eingestellt (Reiter „Sensoren“).</div>
+      </Card>
+      <div className="vstack" style={{ gap: 16 }}>
+        <div className="notice">
+          <Icon name="key" size={18} />
+          <div>Zugangsdaten stehen nie am Gerät, sondern verschlüsselt im <b>Zugangsprofil</b> (Administration → Zugangsprofile).</div>
+        </div>
+        <Card title="Technische Kennung">
+          <dl className="kv">
+            <dt>Geräte-ID</dt><dd className="mono">{device.id}</dd>
+            <dt>Sensoren</dt><dd>{device.sensorCount}</dd>
+          </dl>
+        </Card>
+      </div>
+      {editing && <DeviceDialog device={device} onClose={() => setEditing(false)} />}
+    </div>
+  );
+}
+
+function DemoConfig({ device }: { device: Device }) {
   const [cfg, setCfg] = useState(device.config);
   const [saved, setSaved] = useState(false);
   useEffect(() => {

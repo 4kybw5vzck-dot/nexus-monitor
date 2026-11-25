@@ -40,8 +40,11 @@ class DeviceConfig(ApiModel):
     polling_interval_sec: int
     protocol: str
     credential_profile: str
+    credential_profile_id: int | None = None
     notification_group: str
     maintenance_window: str | None
+    # Zuständiger Collector (leer = zentraler Collector)
+    collector_id: str | None = None
 
 
 class Device(ApiModel):
@@ -60,6 +63,8 @@ class Device(ApiModel):
     tags: list[str]
     description: str
     config: DeviceConfig
+    paused: bool = False
+    is_demo: bool = False
 
 
 class Thresholds(ApiModel):
@@ -81,6 +86,9 @@ class Sensor(ApiModel):
     interval_sec: int
     thresholds: Thresholds | None = None
     message: str
+    settings: dict = {}
+    paused: bool = False
+    status_since: datetime | None = None
 
 
 class MetricPoint(BaseModel):
@@ -144,6 +152,8 @@ class Collector(ApiModel):
     cpu: float
     memory: float
     queue_length: int
+    is_demo: bool = False
+    last_error: str | None = None
 
 
 class User(ApiModel):
@@ -242,3 +252,134 @@ class Health(ApiModel):
     version: str
     database: Literal["ok", "error"]
     timescaledb: bool
+
+
+# ---------------------------------------------------------------------------
+# Verwaltung
+# ---------------------------------------------------------------------------
+
+Protocol = Literal["SNMP v3", "SNMP v2c", "WMI", "SSH", "ICMP", "API"]
+DeviceType = Literal[
+    "windows-server", "linux-server", "switch", "router", "firewall",
+    "hypervisor-vmware", "hypervisor-hyperv", "storage", "backup", "ups",
+]
+SensorType = Literal[
+    "ping", "snmp-traffic", "cpu-load", "memory-usage", "disk-usage",
+    "windows-services", "linux-load", "interface-status", "http", "dns",
+]
+
+
+class CredentialProfile(ApiModel):
+    id: int
+    name: str
+    protocol: str
+    description: str
+    has_secret: bool
+    # false: gespeicherte Daten passen nicht zum aktuellen NEXUS_SECRET_KEY
+    readable: bool
+    # Nicht geheime Felder (Benutzer, Port …); geheime nur als true/false
+    fields: dict
+    device_count: int
+
+
+class CredentialProfileInput(ApiModel):
+    name: str = Field(min_length=1, max_length=200)
+    protocol: Protocol
+    description: str = Field(default="", max_length=2000)
+    credentials: dict | None = None
+
+
+class CredentialProfilePatch(ApiModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    protocol: Protocol | None = None
+    description: str | None = Field(default=None, max_length=2000)
+    # Nur übermittelte Felder werden geändert; leere geheime Felder bleiben erhalten
+    credentials: dict | None = None
+
+
+class SiteInput(ApiModel):
+    name: str = Field(min_length=1, max_length=200)
+    city: str = Field(default="", max_length=200)
+    address: str = Field(default="", max_length=300)
+    subnet: str = Field(default="", max_length=100)
+    contact: str = Field(default="", max_length=200)
+    collector_id: str | None = None
+
+
+class SitePatch(ApiModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    city: str | None = Field(default=None, max_length=200)
+    address: str | None = Field(default=None, max_length=300)
+    subnet: str | None = Field(default=None, max_length=100)
+    contact: str | None = Field(default=None, max_length=200)
+    collector_id: str | None = None
+
+
+_HOST_PATTERN = r"^[A-Za-z0-9]([A-Za-z0-9.:_-]{0,252})$"
+
+
+class DeviceInput(ApiModel):
+    name: str = Field(min_length=1, max_length=200)
+    # IP-Adresse oder DNS-Name
+    ip: str = Field(min_length=1, max_length=253, pattern=_HOST_PATTERN)
+    type: DeviceType
+    vendor: str = Field(default="", max_length=100)
+    model: str = Field(default="", max_length=200)
+    os: str = Field(default="", max_length=200)
+    site_id: str
+    description: str = Field(default="", max_length=2000)
+    tags: list[str] = Field(default_factory=list, max_length=30)
+    polling_interval_sec: int = Field(default=60, ge=10, le=86400)
+    protocol: Protocol
+    credential_profile_id: int | None = None
+    notification_group: str = Field(default="", max_length=200)
+    maintenance_window: str | None = Field(default=None, max_length=200)
+    collector_id: str | None = None
+    create_default_sensors: bool = True
+
+
+class DevicePatch(ApiModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    ip: str | None = Field(default=None, min_length=1, max_length=253, pattern=_HOST_PATTERN)
+    type: DeviceType | None = None
+    vendor: str | None = Field(default=None, max_length=100)
+    model: str | None = Field(default=None, max_length=200)
+    os: str | None = Field(default=None, max_length=200)
+    site_id: str | None = None
+    description: str | None = Field(default=None, max_length=2000)
+    tags: list[str] | None = Field(default=None, max_length=30)
+    polling_interval_sec: int | None = Field(default=None, ge=10, le=86400)
+    protocol: Protocol | None = None
+    credential_profile_id: int | None = None
+    notification_group: str | None = Field(default=None, max_length=200)
+    maintenance_window: str | None = Field(default=None, max_length=200)
+    collector_id: str | None = None
+    paused: bool | None = None
+
+
+class SensorInput(ApiModel):
+    type: SensorType
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    interval_sec: int | None = Field(default=None, ge=10, le=86400)
+    thresholds: Thresholds | None = None
+    settings: dict = Field(default_factory=dict)
+
+
+class SensorPatch(ApiModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    interval_sec: int | None = Field(default=None, ge=10, le=86400)
+    # null = keine Schwellwerte
+    thresholds: Thresholds | None = None
+    settings: dict | None = None
+    paused: bool | None = None
+
+
+class CollectorInput(ApiModel):
+    name: str = Field(min_length=1, max_length=200)
+    site_id: str | None = None
+
+
+class CollectorCreated(ApiModel):
+    collector: Collector
+    # Nur einmal sichtbar – wird in der Zentrale nur als Hash gespeichert
+    token: str

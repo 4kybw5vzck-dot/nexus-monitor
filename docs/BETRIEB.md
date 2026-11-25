@@ -79,7 +79,55 @@ Das Passwort wird verdeckt abgefragt, bestehende Sitzungen des Benutzers werden 
 
 Anmeldesitzungen gelten `NEXUS_SESSION_HOURS` Stunden (Standard 12). Nach 5 Fehlversuchen je Benutzername oder Client-Adresse wird die Anmeldung für 5 Minuten gesperrt.
 
-### API
+## Überwachung einrichten (echte Geräte)
+
+Voraussetzung: Betrieb mit Backend. In `.env` stehen `NEXUS_SECRET_KEY` und `NEXUS_COLLECTOR_TOKEN` (erzeugt `start-nexus.ps1` automatisch, wenn leer). Der zentrale Collector läuft als Container `collector` neben dem Backend.
+
+1. **Zugangsprofil anlegen** – Administration → Zugangsprofile (nur Administratoren):
+   - *SNMP v2c*: Community (+ Port, Standard 161)
+   - *SNMP v3*: Benutzer, Authentifizierung/Verschlüsselung und Passwörter
+   - *WMI*: Windows-Benutzer (`DOMÄNE\name` oder `name@domäne`) und Passwort; Abfrage über **WinRM** (HTTP 5985 oder HTTPS 5986)
+   - *SSH*: Benutzer und Passwort oder privater Schlüssel (OpenSSH-Format)
+
+   Zugangsdaten werden mit `NEXUS_SECRET_KEY` verschlüsselt gespeichert und nie wieder angezeigt. Beim Bearbeiten bleiben leer gelassene geheime Felder unverändert.
+2. **Gerät anlegen** – Devices → Gerät hinzufügen (Administrator oder Operator): Name, IP/DNS-Name, Gerätetyp, Standort, Protokoll, Zugangsprofil. Standard-Sensoren werden je Protokoll angelegt:
+   - SNMP: Ping, CPU-Last, Arbeitsspeicher
+   - WMI: Ping, CPU-Last, Arbeitsspeicher, Datenträger C:, Windows-Dienste
+   - SSH: Ping, System Load, CPU-Last, Arbeitsspeicher, Dateisystem /
+3. **Sensoren ergänzen** – Gerät → Sensoren → Sensor hinzufügen, z. B. Traffic oder Interface-Status (Interface-Name wie am Gerät, z. B. `GigabitEthernet0/0/1`), HTTP (URL), DNS (Name). Intervall und Schwellwerte je Sensor.
+4. Nach spätestens einer Minute holt der Collector die neue Konfiguration; die ersten Werte erscheinen nach einem Intervall (Traffic nach zwei).
+
+Status: **Kritisch** = Gerät/Dienst antwortet nicht oder Schwellwert überschritten (erzeugt Alarm). **Unbekannt** = Messung nicht möglich, z. B. Zugangsdaten fehlen oder werden abgelehnt (kein Alarm, Meldung am Sensor beachten) oder seit dem Dreifachen des Intervalls keine Messwerte. Pausierte Geräte und Sensoren werden nicht abgefragt.
+
+Demo-Geräte (aus `NEXUS_SEED_DEMO`) sind mit „Demo“ markiert und werden nie abgefragt. Sie lassen sich löschen.
+
+### Windows-Server für WMI über WinRM vorbereiten
+
+WinRM ist auf Windows Server standardmäßig aktiv (HTTP 5985, nur Domänen-/privates Netz). Prüfen bzw. aktivieren:
+
+```powershell
+Test-WSMan srv01.firma.local          # vom Monitoring-Rechner aus
+Enable-PSRemoting -Force               # auf dem Server, falls nötig
+```
+
+Rechte für ein eigenes Monitoring-Konto (statt Domänen-Admin), per Gruppenrichtlinie oder lokal:
+Mitglied in **Remoteverwaltungsbenutzer** und **Leistungsüberwachungsbenutzer**, dazu Leserechte auf den WMI-Namespace `root\cimv2` („Remoteaktivierung“, über `wmimgmt.msc`). Domänencontroller: entsprechend den lokalen Gruppen der DCs (Builtin).
+
+### Netzwerk aus dem Container
+
+Der Collector fragt aus dem Docker-Netz heraus ab. Docker Desktop (Windows) leitet Ping, SNMP (UDP 161), WinRM, SSH, HTTP und DNS über den Windows-Rechner weiter – die Geräte müssen also vom Docker-Host aus erreichbar sein (Firewall, Routen, VPN). SNMP-Zugriffslisten der Geräte müssen die IP des **Docker-Hosts** erlauben.
+
+### Remote-Collector an einem Standort
+
+1. Collectors → Remote-Collector anlegen → Token notieren (wird nur einmal angezeigt).
+2. Am Standort: Ordner `collector/` auf einen Docker-Host kopieren, daneben `.env` mit `NEXUS_CORE_URL` (Adresse der Zentrale, wie im Browser) und `NEXUS_COLLECTOR_TOKEN`, dann
+   ```bash
+   docker compose -f docker-compose.remote.yml up -d --build
+   ```
+3. Geräte des Standorts im Gerätedialog dem Collector zuordnen.
+
+Der Remote-Collector erhält die Zugangsdaten seiner Geräte von der Zentrale – die Verbindung muss daher über **HTTPS** laufen (Reverse-Proxy vor der Oberfläche). Token erneuern: Collectors → Neuer Token.
+
 
 Das Backend ist nur über den Proxy der Oberfläche erreichbar (`http://<server>:8080/api/…`), es veröffentlicht keinen eigenen Port. Die interaktive API-Dokumentation liegt unter `/api/docs`.
 
@@ -90,7 +138,7 @@ Auf einem Rechner mit Internetzugang:
 ```bash
 docker compose build
 docker compose --profile backend build
-docker save nexus-monitor/frontend:latest nexus-monitor/backend:latest timescale/timescaledb:latest-pg17 | gzip > nexus-images.tar.gz
+docker save nexus-monitor/frontend:latest nexus-monitor/backend:latest nexus-monitor/collector:latest timescale/timescaledb:latest-pg17 | gzip > nexus-images.tar.gz
 ```
 
 Archiv und Projektordner auf den Zielserver kopieren, dann:
@@ -137,6 +185,7 @@ Das Frontend-Image enthält keine umgebungsspezifischen Werte. Beim Start schrei
 | frontend | `GET /healthz` → `ok` |
 | db | `pg_isready` |
 | backend | `GET /api/health` (prüft auch die Datenbank, meldet ob TimescaleDB aktiv ist) |
+| collector | Puffer beschreibbar; Lebenszeichen in der Oberfläche unter Collectors (Heartbeat, Fehlermeldung) |
 
 Zustand anzeigen: `docker compose ps` oder `docker inspect --format '{{.State.Health.Status}}' <container>`.
 
@@ -178,7 +227,7 @@ Unter Windows über die Aufgabenplanung, z. B. Aktion `powershell.exe` mit Argum
    ```
    Das Skript übernimmt `.env`, startet die Datenbank, hält das Backend an, legt die Datenbank neu an, spielt den Dump ein (mit TimescaleDB: `timescaledb_pre_restore()` / `timescaledb_post_restore()`) und startet alle Dienste.
    Ziel- und Quellserver sollten dieselbe TimescaleDB-Version verwenden (`TIMESCALEDB_VERSION` in `.env`).
-4. Remote-Collectoren (ab Phase 3) auf die neue Adresse umstellen (`NEXUS_CORE_URL`).
+4. Remote-Collectoren auf die neue Adresse umstellen (`NEXUS_CORE_URL`). `NEXUS_SECRET_KEY` muss gleich bleiben (steht in der gesicherten `.env`), sonst sind die Zugangsprofile nicht mehr lesbar.
 
 ## Update
 
@@ -198,7 +247,7 @@ Das Backend führt Datenbankmigrationen (Alembic) beim Start automatisch und ver
 |---|---|
 | Konfiguration | `.env` im Projektordner |
 | Datenbank | Docker-Volume `<COMPOSE_PROJECT_NAME>_db-data` |
-| Collector-Puffer (Phase 3) | Volume `collector-buffer` am Standort |
+| Collector-Puffer | Volume `<COMPOSE_PROJECT_NAME>_collector-buffer` bzw. `buffer` am Standort |
 | Sicherungen | `NEXUS_BACKUP_DIR` (Standard `./backups`) |
 
 Das Frontend speichert keine Daten.

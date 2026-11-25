@@ -19,6 +19,9 @@ from . import __version__
 from .api import public, router
 from .auth import router as auth_router
 from .users import router as users_router
+from .manage import router as manage_router
+from .collector_api import StaleWatcher, ensure_central_collector
+from .collector_api import router as collector_router
 from .config import get_settings
 from .db import get_engine, session_scope
 from .seed import ensure_admin, seed_demo
@@ -50,6 +53,7 @@ def startup() -> None:
         run_migrations()
     with session_scope() as db:
         ensure_admin(db, settings)
+        ensure_central_collector(db, settings)
         if settings.seed_demo and seed_demo(db):
             log.warning("Demo-Datensatz geladen (NEXUS_SEED_DEMO=true) – nicht für den Produktivbetrieb.")
 
@@ -58,8 +62,14 @@ def startup() -> None:
 async def lifespan(_: FastAPI):
     logging.basicConfig(level=get_settings().log_level.upper(), format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     startup()
+    watcher = None
+    if get_settings().stale_check_sec > 0:
+        watcher = StaleWatcher(get_settings().stale_check_sec)
+        watcher.start()
     log.info("NEXUS Monitor Backend %s bereit", __version__)
     yield
+    if watcher:
+        watcher.stop()
 
 
 def create_app(run_startup: bool = True) -> FastAPI:
@@ -74,6 +84,8 @@ def create_app(run_startup: bool = True) -> FastAPI:
     app.include_router(public)
     app.include_router(auth_router)
     app.include_router(users_router)
+    app.include_router(manage_router)
+    app.include_router(collector_router)
     app.include_router(router)
     return app
 

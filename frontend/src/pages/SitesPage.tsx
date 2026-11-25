@@ -1,4 +1,8 @@
-import { dataSource, type Status } from '../api';
+import { useState } from 'react';
+import { dataSource, management, type Site, type Status } from '../api';
+import { usePermissions } from '../app/session';
+import { SiteDialog } from '../components/manage/AdminForms';
+import { ConfirmDelete } from '../components/manage/DeviceForms';
 import { Link, navigate, updateQuery, useLocation } from '../app/router';
 import { Card, PageHeader, Skeleton, StatusBadge, StatusDot } from '../components/ui';
 import { Icon, deviceIcon } from '../components/ui/Icon';
@@ -15,6 +19,9 @@ export function SitesPage() {
   const collectors = useData(() => dataSource.getCollectors());
   const alerts = useData(() => dataSource.getAlerts());
   const avail = useData(() => dataSource.getAvailability(24));
+  const { isAdmin } = usePermissions();
+  const [dialog, setDialog] = useState<{ kind: 'edit'; site?: Site } | { kind: 'delete'; site: Site } | null>(null);
+  const canManage = !!management && isAdmin;
 
   if (!sites.data || !devices.data || !sensors.data) return <><PageHeader title="Sites" /><Skeleton height={400} /></>;
   const list = focus ? sites.data.filter((s) => s.id === focus) : sites.data;
@@ -23,9 +30,20 @@ export function SitesPage() {
     <>
       <PageHeader
         title="Sites"
-        description={`${sites.data.length} Standorte mit je einem lokalen Remote-Collector`}
-        actions={focus ? <button className="btn" onClick={() => updateQuery({ site: null })}>Alle Standorte anzeigen</button> : undefined}
+        description={`${sites.data.length} Standorte`}
+        actions={
+          <div className="hstack">
+            {focus && <button className="btn" onClick={() => updateQuery({ site: null })}>Alle Standorte anzeigen</button>}
+            {canManage && <button className="btn primary" onClick={() => setDialog({ kind: 'edit' })}><Icon name="plus" size={15} /> Standort anlegen</button>}
+          </div>
+        }
       />
+      {dialog?.kind === 'edit' && <SiteDialog site={dialog.site} onClose={() => setDialog(null)} />}
+      {dialog?.kind === 'delete' && (
+        <ConfirmDelete title="Standort löschen" onClose={() => setDialog(null)} onConfirm={() => management!.deleteSite(dialog.site.id)}>
+          Standort <b>{dialog.site.name}</b> wird gelöscht. Das geht nur, wenn ihm keine Geräte mehr zugeordnet sind.
+        </ConfirmDelete>
+      )}
       <div className={`grid ${focus ? '' : 'grid-3'}`}>
         {list.map((site) => {
           const devs = devices.data!.filter((d) => d.siteId === site.id);
@@ -41,8 +59,14 @@ export function SitesPage() {
             <Card
               key={site.id}
               title={<span className="hstack"><Icon name="sites" size={16} />{site.name}<StatusBadge status={st} /></span>}
-              sub={`${site.address}, ${site.city} · Netz ${site.subnet}`}
-              actions={!focus ? <button className="btn small" onClick={() => updateQuery({ site: site.id })}>Details</button> : undefined}
+              sub={[site.address, site.city].filter(Boolean).join(', ') + (site.subnet ? ` · Netz ${site.subnet}` : '')}
+              actions={
+                <div className="row-actions">
+                  {!focus && <button className="btn small" onClick={() => updateQuery({ site: site.id })}>Details</button>}
+                  {canManage && <button className="btn small ghost" onClick={() => setDialog({ kind: 'edit', site })}>Bearbeiten</button>}
+                  {canManage && <button className="btn small ghost" disabled={devs.length > 0} title={devs.length ? 'Standort hat noch Geräte' : undefined} onClick={() => setDialog({ kind: 'delete', site })}>Löschen</button>}
+                </div>
+              }
             >
               <div className="grid grid-4" style={{ marginBottom: 14 }}>
                 <div><div className="muted small">Geräte</div><div style={{ fontSize: 18, fontWeight: 650, whiteSpace: 'nowrap' }}>{devs.length}</div></div>
