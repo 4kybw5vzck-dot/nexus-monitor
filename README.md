@@ -55,6 +55,8 @@ cp .env.example .env        # Windows PowerShell: Copy-Item .env.example .env
 docker compose up -d --build
 ```
 
+Unter Windows geht es auch mit einem Schritt: in PowerShell im Projektordner `.\start-nexus.ps1` ausführen (legt `.env` an, baut, startet und öffnet den Browser).
+
 Oberfläche: `http://<server>:8080` (Port über `NEXUS_HTTP_PORT` in `.env`). Details zu Installation, Update, Sicherung und Umzug: [docs/BETRIEB.md](docs/BETRIEB.md).
 
 ## Projektstruktur
