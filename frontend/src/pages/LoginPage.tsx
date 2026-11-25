@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { httpDataSource } from '../api';
 import { appConfig } from '../app/config';
+import { CompanyLogo } from '../components/ui/Logo';
 
 /** Anmeldung am Backend (nur im HTTP-Modus). */
 export function LoginPage() {
@@ -28,15 +29,10 @@ export function LoginPage() {
     <div className="login-screen">
       <form className="card login-card" onSubmit={submit} aria-labelledby="login-title">
         <div className="brand login-brand">
-          <div className="brand-mark">
-            <svg width="16" height="16" viewBox="0 0 32 32"><path d="M8 25V7l16 18V7" stroke="#46c28e" strokeWidth="3.6" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>
-          </div>
-          <div>
-            <div className="brand-name">NEXUS</div>
-            <div className="brand-sub">MONITOR</div>
-          </div>
+          <CompanyLogo height={34} />
         </div>
         <div className="card-body login-body">
+          <div className="login-product">NEXUS Monitor</div>
           <h1 id="login-title" className="login-title">Anmelden</h1>
           <div className="muted small">{appConfig.instanceName}</div>
           <div className="field">

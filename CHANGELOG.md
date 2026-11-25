@@ -52,3 +52,8 @@
 - Compose: Dienst `collector` (Profil `backend`), `collector/docker-compose.remote.yml` für Standorte; `start-nexus.ps1` erzeugt fehlende `NEXUS_SECRET_KEY`/`NEXUS_COLLECTOR_TOKEN`.
 - Tests: Backend 49, Collector 30 (gegen echte SNMP-, SSH-, DNS-, HTTP-Dienste; WinRM nachgebildet), Frontend 25; Ende-zu-Ende mit Backend, Collector und Browser geprüft.
 
+## 0.3.1
+
+- **Erscheinungsbild J.Schneider Elektrotechnik:** Firmenlogo (SVG von www.j-schneider.de) statt Schriftzug „NEXUS Monitor“ in der Seitenleiste und auf der Anmeldeseite, Favicon aus der Bildmarke, Hausfarben (Navy `#041C33`/`#062747`, Blau `#143C89`), Schrift Ubuntu.
+- Logo und Schrift sind mitgebaut (`frontend/src/assets/firmenlogo.svg`, Paket `@fontsource/ubuntu`) – kein Abruf aus dem Internet.
+

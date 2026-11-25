@@ -1,19 +1,25 @@
-/* NEXUS Monitor – Designsystem (Dark Mode, Dunkelblau/Anthrazit)
-   Keine externen Schriften oder CDNs: läuft vollständig offline. */
+/* NEXUS Monitor – Designsystem im Erscheinungsbild von J.Schneider Elektrotechnik
+   (Navy/Blau wie www.j-schneider.de, Schrift Ubuntu – lokal eingebunden, läuft offline). */
 
 :root {
-  --bg: #0a101c;
-  --bg-elev: #0e1626;
-  --surface: #121b2d;
-  --surface-2: #172238;
-  --surface-3: #1d2a44;
-  --border: #22314d;
-  --border-strong: #2e4166;
-  --text: #e3e8f2;
-  --text-2: #b4bfd3;
-  --muted: #7d8aa5;
-  --accent: #4d8dff;
-  --accent-soft: rgba(77, 141, 255, 0.14);
+  /* Hausfarben: Navy #041C33 / #062747, Blau #143C89, Hellgrau #F8F9FA */
+  --brand-navy-dark: #041c33;
+  --brand-navy: #062747;
+  --brand-blue: #143c89;
+  --brand-light: #f8f9fa;
+
+  --bg: #031526;
+  --bg-elev: #041c33;
+  --surface: #062747;
+  --surface-2: #0a3158;
+  --surface-3: #0f3b68;
+  --border: #12406f;
+  --border-strong: #1d5290;
+  --text: #f1f4f8;
+  --text-2: #c3cfdd;
+  --muted: #8ea2ba;
+  --accent: #5b8fe6;
+  --accent-soft: rgba(91, 143, 230, 0.16);
 
   --ok: #3cb57f;
   --ok-soft: rgba(60, 181, 127, 0.14);
@@ -26,7 +32,7 @@
   --paused: #6d7fa6;
   --paused-soft: rgba(109, 127, 166, 0.14);
 
-  --series-1: #4d8dff;
+  --series-1: #5b8fe6;
   --series-2: #36c2c2;
   --series-3: #a07cf0;
   --series-4: #e7894b;
@@ -35,7 +41,7 @@
   --radius-sm: 6px;
   --sidebar-w: 232px;
   --topbar-h: 56px;
-  --font: 'Inter', 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
+  --font: 'Ubuntu', 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
   --mono: 'Cascadia Mono', 'JetBrains Mono', 'Consolas', ui-monospace, monospace;
   color-scheme: dark;
 }
@@ -66,10 +72,10 @@ h1, h2, h3, h4 { margin: 0; font-weight: 600; letter-spacing: -0.01em; }
   border-right: 1px solid var(--border);
   display: flex; flex-direction: column;
 }
-.brand { display: flex; align-items: center; gap: 10px; padding: 16px 18px; height: var(--topbar-h); border-bottom: 1px solid var(--border); }
-.brand-mark { width: 28px; height: 28px; border-radius: 7px; background: #11203a; display: grid; place-items: center; border: 1px solid var(--border-strong); }
-.brand-name { font-weight: 700; letter-spacing: 0.06em; font-size: 14px; }
-.brand-sub { color: var(--muted); font-size: 11px; letter-spacing: 0.04em; }
+.brand { display: flex; align-items: center; gap: 10px; padding: 16px 18px; height: var(--topbar-h); border-bottom: 1px solid var(--border); color: #fff; }
+.company-logo { display: inline-block; flex: none; line-height: 0; }
+.company-logo svg { width: 100%; height: 100%; display: block; }
+.brand .company-logo { max-width: 100%; }
 .nav { padding: 10px 10px; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; flex: 1; }
 .nav-section { color: var(--muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.09em; padding: 12px 10px 6px; }
 .nav a {
@@ -78,7 +84,7 @@ h1, h2, h3, h4 { margin: 0; font-weight: 600; letter-spacing: -0.01em; }
   color: var(--text-2); font-weight: 500;
 }
 .nav a:hover { background: var(--surface-2); color: var(--text); text-decoration: none; }
-.nav a.active { background: var(--accent-soft); color: #fff; box-shadow: inset 2px 0 0 var(--accent); }
+.nav a.active { background: var(--brand-blue); color: #fff; box-shadow: inset 3px 0 0 #8fb4f0; }
 .nav a svg { flex: none; opacity: 0.85; }
 .nav .nav-badge { margin-left: auto; font-size: 11px; padding: 1px 7px; border-radius: 10px; background: var(--critical-soft); color: var(--critical); font-weight: 600; }
 .sidebar-foot { padding: 12px 18px; border-top: 1px solid var(--border); font-size: 11.5px; color: var(--muted); }
@@ -170,8 +176,8 @@ a.kpi:hover { text-decoration: none; border-color: var(--border-strong); }
 }
 .btn:hover:not(:disabled) { background: var(--surface-3); }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-.btn.primary:hover:not(:disabled) { background: #3d7ef0; }
+.btn.primary { background: var(--brand-blue); border-color: #2a59b8; color: #fff; }
+.btn.primary:hover:not(:disabled) { background: #1a4aa6; }
 .btn.small { height: 28px; padding: 0 10px; font-size: 12.5px; }
 .btn.ghost { background: transparent; border-color: transparent; color: var(--text-2); }
 .btn.ghost:hover:not(:disabled) { background: var(--surface-2); }
@@ -260,7 +266,7 @@ table.table { width: 100%; border-collapse: collapse; font-size: 13px; }
 /* ---------- Misc ---------- */
 .progress { height: 6px; background: var(--surface-3); border-radius: 4px; overflow: hidden; }
 .progress > div { height: 100%; background: var(--accent); transition: width 0.2s; }
-.notice { padding: 11px 14px; border-radius: var(--radius-sm); background: var(--accent-soft); border: 1px solid rgba(77, 141, 255, 0.35); color: var(--text-2); font-size: 13px; display: flex; gap: 10px; align-items: flex-start; }
+.notice { padding: 11px 14px; border-radius: var(--radius-sm); background: var(--accent-soft); border: 1px solid rgba(91, 143, 230, 0.4); color: var(--text-2); font-size: 13px; display: flex; gap: 10px; align-items: flex-start; }
 .notice.warn { background: var(--warning-soft); border-color: rgba(227, 179, 65, 0.4); }
 .skeleton { background: linear-gradient(90deg, var(--surface-2), var(--surface-3), var(--surface-2)); background-size: 200% 100%; animation: sk 1.2s infinite; border-radius: 6px; }
 @keyframes sk { from { background-position: 200% 0; } to { background-position: -200% 0; } }
@@ -298,9 +304,11 @@ table.table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .table td a, .table td .mono { white-space: nowrap; }
 
 /* ---------- Anmeldung (HTTP-Modus) ---------- */
-.login-screen { min-height: 100vh; display: grid; place-items: center; padding: 24px; background: var(--bg); }
+.login-screen { min-height: 100vh; display: grid; place-items: center; padding: 24px;
+  background: radial-gradient(ellipse at 30% 0%, var(--brand-blue) 0%, transparent 55%), linear-gradient(160deg, var(--brand-navy) 0%, var(--brand-navy-dark) 60%, #020e1a 100%); }
+.login-brand { justify-content: center; padding: 22px 18px; background: var(--brand-navy-dark); border-radius: var(--radius) var(--radius) 0 0; }
+.login-product { text-align: center; color: var(--muted); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; }
 .login-card { width: 100%; max-width: 360px; }
-.login-brand { height: auto; }
 .login-body { display: flex; flex-direction: column; gap: 14px; padding: 20px 22px 22px; }
 .login-title { font-size: 18px; font-weight: 650; margin: 0; }
 .login-error { padding: 9px 12px; border-radius: var(--radius-sm); background: var(--critical-soft); border: 1px solid rgba(229, 83, 75, 0.4); color: var(--text); font-size: 13px; }

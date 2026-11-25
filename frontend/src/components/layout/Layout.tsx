@@ -10,6 +10,7 @@ import { FormModal, KeepOpen, TextField } from '../ui/Modal';
 import { DEVICE_TYPE_LABEL } from '../../utils/status';
 import { Icon, deviceIcon, type IconName } from '../ui/Icon';
 import { StatusDot } from '../ui';
+import { CompanyLogo } from '../ui/Logo';
 
 export const NAV_ITEMS: Array<{ to: string; label: string; icon: IconName; section?: string }> = [
   { to: '/dashboard', label: 'Dashboard', icon: 'dashboard', section: 'Überwachung' },
@@ -30,14 +31,8 @@ function Sidebar({ onNavigate }: { onNavigate: () => void }) {
   const open = alerts?.filter((a) => a.state === 'active').length ?? 0;
   return (
     <aside className="sidebar">
-      <div className="brand">
-        <div className="brand-mark">
-          <svg width="16" height="16" viewBox="0 0 32 32"><path d="M8 25V7l16 18V7" stroke="#46c28e" strokeWidth="3.6" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>
-        </div>
-        <div>
-          <div className="brand-name">NEXUS</div>
-          <div className="brand-sub">MONITOR</div>
-        </div>
+      <div className="brand" title="NEXUS Monitor">
+        <CompanyLogo height={24} />
       </div>
       <nav className="nav" aria-label="Hauptnavigation">
         {NAV_ITEMS.map((item) => {

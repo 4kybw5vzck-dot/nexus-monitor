@@ -122,6 +122,7 @@ nexus-monitor/
 - **Trennung von Daten und Darstellung:** Seiten sprechen nur mit `MonitoringDataSource` (`src/api/dataSource.ts`). `MockDataSource` oder `HttpDataSource` wird in `src/api/index.ts` nach `NEXUS_DATA_SOURCE` gewählt – Seiten sind für beide identisch.
 - **Backend ohne Ballast:** FastAPI, SQLAlchemy, Alembic, psycopg; Passwort-Hashing und Token aus der Python-Standardbibliothek. TimescaleDB wird genutzt, wenn vorhanden, ist aber für Tests und Entwicklung nicht nötig.
 - **Minimale Abhängigkeiten:** Laufzeit nur `react` und `react-dom`. Diagramme, Icons und Router sind schlanke Eigenentwicklungen – keine CDN-Ressourcen, keine externen Schriften, vollständig offline lauffähig.
+- **Erscheinungsbild:** Logo in `frontend/src/assets/firmenlogo.svg` (Farbe über `currentColor`), Favicon `frontend/public/favicon.svg`, Farben als CSS-Variablen am Anfang von `frontend/src/styles/global.css`, Schrift Ubuntu über `@fontsource/ubuntu`.
 - **Ein Image für alle Umgebungen:** Einstellungen kommen beim Containerstart aus Umgebungsvariablen (`config.js`), nicht aus dem Build.
 
 Ausführlich: [docs/ARCHITEKTUR.md](docs/ARCHITEKTUR.md)
