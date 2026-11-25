@@ -1,0 +1,93 @@
+# NEXUS Monitor – Docker Compose
+#
+# Phase 1 (aktuell): nur das Frontend mit Mock-Daten.
+#   docker compose up -d --build
+#
+# Phase 2 (vorbereitet): Datenbank zusätzlich starten.
+#   docker compose --profile backend up -d
+#
+# Alle Einstellungen kommen aus der Datei .env (Vorlage: .env.example).
+# Es sind keine IP-Adressen, Hostnamen oder Zugangsdaten fest eingetragen.
+
+name: ${COMPOSE_PROJECT_NAME:-nexus}
+
+services:
+  frontend:
+    build:
+      context: ./frontend
+    image: ${NEXUS_IMAGE_PREFIX:-nexus-monitor}/frontend:${NEXUS_VERSION:-latest}
+    restart: unless-stopped
+    environment:
+      NEXUS_DATA_SOURCE: ${NEXUS_DATA_SOURCE:-mock}
+      NEXUS_API_BASE_URL: ${NEXUS_API_BASE_URL:-/api}
+      NEXUS_INSTANCE_NAME: ${NEXUS_INSTANCE_NAME:-NEXUS Monitor}
+    ports:
+      - "${NEXUS_HTTP_BIND:-0.0.0.0}:${NEXUS_HTTP_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks: [nexus]
+
+  # ---------------------------------------------------------------------------
+  # Phase 2: PostgreSQL mit TimescaleDB-Erweiterung
+  #   - Stammdaten/Konfiguration: normale Tabellen
+  #   - Messwerte: TimescaleDB-Hypertables (Kompression, Aufbewahrung)
+  # ---------------------------------------------------------------------------
+  db:
+    profiles: ["backend"]
+    image: timescale/timescaledb:${TIMESCALEDB_VERSION:-latest-pg17}
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-nexus}
+      POSTGRES_USER: ${POSTGRES_USER:-nexus}
+      # Pflichtwert: Ohne Passwort verweigert der Container den Start.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks: [nexus]
+    # Datenbank bewusst NICHT nach außen veröffentlichen.
+
+  # ---------------------------------------------------------------------------
+  # Phase 2: Backend (Python/FastAPI) – Platzhalter, wird mit dem Backend aktiviert
+  # ---------------------------------------------------------------------------
+  # backend:
+  #   profiles: ["backend"]
+  #   build: ./backend
+  #   restart: unless-stopped
+  #   environment:
+  #     NEXUS_DB_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+  #     NEXUS_SECRET_KEY: ${NEXUS_SECRET_KEY}
+  #   depends_on:
+  #     db: { condition: service_healthy }
+  #   healthcheck:
+  #     test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health')"]
+  #     interval: 30s
+  #   networks: [nexus]
+
+  # ---------------------------------------------------------------------------
+  # Phase 3: Remote-Collector – läuft später je Standort auf eigenem Host
+  # ---------------------------------------------------------------------------
+  # collector:
+  #   profiles: ["collector"]
+  #   build: ./collector
+  #   environment:
+  #     NEXUS_CORE_URL: ${NEXUS_CORE_URL}
+  #     NEXUS_COLLECTOR_TOKEN: ${NEXUS_COLLECTOR_TOKEN}
+  #   volumes:
+  #     - collector-buffer:/var/lib/nexus-collector
+
+volumes:
+  db-data:
+  # collector-buffer:
+
+networks:
+  nexus:
