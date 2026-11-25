@@ -5,6 +5,8 @@ import { fileURLToPath, URL } from 'node:url';
 
 // Port und Host kommen aus der Umgebung – nichts ist fest verdrahtet.
 export default defineConfig({
+  // Relative Pfade: funktioniert auch hinter einem Reverse-Proxy mit Unterpfad
+  base: './',
   plugins: [react()],
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },

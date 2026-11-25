@@ -52,11 +52,13 @@ Nach Änderungen am Quellcode wird das Paket auf einem Entwicklungsrechner neu e
 
 ```bash
 cd frontend
-npm install
+npm ci
 npm run build:prebuilt
 ```
 
-Alternativ baut `NEXUS_FRONTEND_TARGET=source` direkt im Container (Zugriff auf die npm-Registry nötig; interner Spiegel über `NPM_REGISTRY`).
+> **Hinweis:** Immer `npm ci` verwenden (installiert exakt die Versionen aus `package-lock.json`). `npm install` ohne Lock-Datei bricht mit npm 10 beim Auflösen der optionalen Peer-Abhängigkeiten von Vitest ab (`Cannot read properties of null (reading 'edgesOut')`). Zum Aktualisieren von Paketen npm 11 oder neuer nutzen, z. B. `npx npm@11 install`.
+
+Alternativ baut `NEXUS_FRONTEND_TARGET=source` direkt im Container (Zugriff auf die npm-Registry nötig; interner Spiegel über `NPM_REGISTRY`). Der Container installiert per `npm ci` aus `package-lock.json` – damit funktioniert auch das npm 10 im Node-22-Image.
 
 ## Konfiguration
 

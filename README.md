@@ -30,9 +30,11 @@ Voraussetzung: **Node.js 20 oder neuer** (Windows, Linux oder macOS).
 
 ```bash
 cd frontend
-npm install
+npm ci
 npm run dev
 ```
+
+> **Hinweis:** Immer `npm ci` verwenden (installiert exakt die Versionen aus `package-lock.json`). `npm install` ohne Lock-Datei bricht mit npm 10 beim Auflösen der optionalen Peer-Abhängigkeiten von Vitest ab (`Cannot read properties of null (reading 'edgesOut')`). Zum Aktualisieren von Paketen npm 11 oder neuer nutzen, z. B. `npx npm@11 install`.
 
 Danach im Browser `http://localhost:5173` öffnen.
 
