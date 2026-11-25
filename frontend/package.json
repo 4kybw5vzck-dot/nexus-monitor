@@ -1,7 +1,7 @@
 {
   "name": "nexus-monitor-frontend",
   "private": true,
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "NEXUS Monitor – Web-Frontend (Phase 1: Mock-Daten)",
   "type": "module",
   "scripts": {
@@ -11,7 +11,8 @@
     "build:prebuilt": "tsc --noEmit && vite build --outDir prebuilt --emptyOutDir",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "export:demo": "esbuild scripts/export-demo-data.ts --bundle --platform=node --format=esm --log-level=warning --outfile=node_modules/.cache/export-demo-data.mjs && node node_modules/.cache/export-demo-data.mjs"
   },
   "dependencies": {
     "react": "^19.2.0",

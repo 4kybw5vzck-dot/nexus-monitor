@@ -1,0 +1,33 @@
+[project]
+name = "nexus-monitor-backend"
+version = "0.2.0"
+description = "NEXUS Monitor – REST-API (FastAPI) mit PostgreSQL/TimescaleDB"
+requires-python = ">=3.10"
+# Bewusst wenige Abhängigkeiten. Passwort-Hashing (scrypt) und Sitzungs-Token
+# kommen aus der Python-Standardbibliothek.
+dependencies = [
+  "fastapi>=0.165,<1",
+  "uvicorn>=0.54,<1",
+  "sqlalchemy>=2.1,<2.2",
+  "psycopg[binary]>=3.3,<4",
+  "alembic>=1.20,<2",
+  "pydantic>=2.14,<3",
+  "pydantic-settings>=2.16,<3",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=9,<10", "httpx2>=2.16,<3"]
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.setuptools.package-data]
+app = ["seed/*.json.gz", "migrations/*.py", "migrations/*.mako", "migrations/versions/*.py"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

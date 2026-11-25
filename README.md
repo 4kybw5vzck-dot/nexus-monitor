@@ -2,10 +2,17 @@
 
 Eigenständige, vollständig lokal betreibbare Network-Monitoring-Plattform als langfristiger Ersatz für Paessler PRTG.
 
-> **Stand: Phase 1 – Frontend mit Mock-Daten.**
-> Alle Geräte, Standorte, Personen und Messwerte sind fiktiv. IP-Adressen stammen ausschließlich aus den Dokumentationsbereichen nach RFC 5737. Es gibt keine Verbindung zu PRTG, keine SNMP-Abfragen, keine Netzwerkscans und keine Cloud-Anbindung.
+> **Stand: Phase 2 – Backend und Datenbank.**
+> Oberfläche, REST-API (FastAPI), PostgreSQL/TimescaleDB und Anmeldung sind umgesetzt. Messwerte stammen noch aus einem Demo-Datensatz: Es gibt noch keine Monitoring-Engine (Phase 3), also keine SNMP-Abfragen, keine Netzwerkscans und keine Verbindung zu PRTG. Alle Geräte, Standorte, Personen und Messwerte sind fiktiv; IP-Adressen stammen ausschließlich aus den Dokumentationsbereichen nach RFC 5737.
 
-## Funktionsumfang Phase 1
+Zwei Betriebsarten (Einstellung in `.env`):
+
+| Betriebsart | Inhalt |
+|---|---|
+| **Mock** (Standard) | Nur Oberfläche, Beispieldaten im Browser, keine Anmeldung |
+| **Backend** | Oberfläche + Backend + Datenbank, Anmeldung mit Rollen, Daten aus der Datenbank (optional Demo-Datensatz) |
+
+## Funktionsumfang der Oberfläche
 
 | Bereich | Inhalt |
 |---|---|
@@ -45,6 +52,9 @@ Danach im Browser `http://localhost:5173` öffnen.
 | `npm run preview` | Produktions-Build lokal ansehen |
 | `npm test` | Automatisierte Tests (Vitest) |
 | `npm run typecheck` | Nur TypeScript-Prüfung |
+| `npm run export:demo` | Demo-Datensatz für das Backend aus den Mock-Daten erzeugen |
+
+Backend entwickeln und testen: [backend/README.md](backend/README.md).
 
 Host und Port des Entwicklungsservers: Umgebungsvariablen `NEXUS_DEV_HOST` und `NEXUS_DEV_PORT`.
 
@@ -58,6 +68,18 @@ docker compose up -d --build
 ```
 
 Unter Windows geht es auch mit einem Schritt: in PowerShell im Projektordner `.\start-nexus.ps1` ausführen (legt `.env` an, baut, startet und öffnet den Browser).
+
+**Mit Backend und Datenbank** – in `.env` setzen, dann wie oben starten:
+
+```ini
+COMPOSE_PROFILES=backend
+NEXUS_DATA_SOURCE=http
+POSTGRES_PASSWORD=<lang und zufällig>
+NEXUS_ADMIN_PASSWORD=<Passwort für admin>     # leer = wird erzeugt und im Log angezeigt
+NEXUS_SEED_DEMO=true                           # optional: Beispieldaten laden
+```
+
+Anmeldung mit `admin` und dem gesetzten bzw. erzeugten Passwort. Details: [docs/BETRIEB.md](docs/BETRIEB.md#betrieb-mit-backend-und-datenbank).
 
 Oberfläche: `http://<server>:8080` (Port über `NEXUS_HTTP_PORT` in `.env`). Details zu Installation, Update, Sicherung und Umzug: [docs/BETRIEB.md](docs/BETRIEB.md).
 
@@ -73,17 +95,18 @@ nexus-monitor/
 ├── docs/
 │   ├── ARCHITEKTUR.md        Zielarchitektur, Datenmodell, Schnittstellen
 │   └── BETRIEB.md            Installation, Update, Migration, Backup
-├── backend/                  Phase 2: Python/FastAPI (Platzhalter)
+├── backend/                  Python/FastAPI, Alembic-Migrationen, pytest (siehe backend/README.md)
 ├── collector/                Phase 3: Remote-Collector (Platzhalter)
 └── frontend/
     ├── Dockerfile            Mehrstufiger Build → unprivilegierter nginx
-    ├── docker/               nginx-Konfiguration, Laufzeit-Konfiguration
+    ├── docker/               nginx-Vorlage (inkl. /api/-Proxy), Laufzeit-Konfiguration
     ├── public/config.js      Laufzeit-Konfiguration (im Container erzeugt)
-    ├── tests/                Vitest-Tests (Statuslogik, Mock-Konsistenz, Router)
+    ├── scripts/              export-demo-data.ts – Demo-Datensatz für das Backend
+    ├── tests/                Vitest-Tests (Statuslogik, Mock-Konsistenz, Router, HttpDataSource)
     └── src/
-        ├── api/              Domänentypen, Datenquellen-Interface, MockDataSource
+        ├── api/              Domänentypen, Datenquellen-Interface, MockDataSource, HttpDataSource
         ├── mock/             Stammdaten, Sensor-Vorlagen, Szenarien, Generator
-        ├── app/              Router, Konfiguration, Sitzung
+        ├── app/              Router, Konfiguration, Anmeldesitzung
         ├── hooks/            useData – lädt Daten und reagiert auf Änderungen
         ├── components/
         │   ├── layout/       Seitenleiste, Kopfzeile, globale Suche
@@ -96,7 +119,8 @@ nexus-monitor/
 
 ## Wichtige Architekturentscheidungen
 
-- **Trennung von Daten und Darstellung:** Seiten sprechen nur mit `MonitoringDataSource` (`src/api/dataSource.ts`). Für das Backend wird eine `HttpDataSource` ergänzt und in `src/api/index.ts` ausgewählt – Seiten bleiben unverändert.
+- **Trennung von Daten und Darstellung:** Seiten sprechen nur mit `MonitoringDataSource` (`src/api/dataSource.ts`). `MockDataSource` oder `HttpDataSource` wird in `src/api/index.ts` nach `NEXUS_DATA_SOURCE` gewählt – Seiten sind für beide identisch.
+- **Backend ohne Ballast:** FastAPI, SQLAlchemy, Alembic, psycopg; Passwort-Hashing und Token aus der Python-Standardbibliothek. TimescaleDB wird genutzt, wenn vorhanden, ist aber für Tests und Entwicklung nicht nötig.
 - **Minimale Abhängigkeiten:** Laufzeit nur `react` und `react-dom`. Diagramme, Icons und Router sind schlanke Eigenentwicklungen – keine CDN-Ressourcen, keine externen Schriften, vollständig offline lauffähig.
 - **Ein Image für alle Umgebungen:** Einstellungen kommen beim Containerstart aus Umgebungsvariablen (`config.js`), nicht aus dem Build.
 

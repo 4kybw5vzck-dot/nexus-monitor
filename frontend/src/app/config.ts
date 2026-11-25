@@ -26,5 +26,5 @@ export const appConfig = {
   /** Relativ, damit ein Reverse-Proxy im selben Origin genügt */
   apiBaseUrl: runtime.apiBaseUrl ?? env.VITE_API_BASE_URL ?? '/api',
   instanceName: runtime.instanceName ?? env.VITE_INSTANCE_NAME ?? 'NEXUS Monitor',
-  version: '0.1.0',
+  version: '0.2.0',
 };

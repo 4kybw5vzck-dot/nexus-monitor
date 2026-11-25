@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { dataSource, type Alert } from '../api';
 import { Link, updateQuery, useLocation } from '../app/router';
-import { CURRENT_USER } from '../app/session';
+import { canOperate, currentUser, useSession } from '../app/session';
 import { AckButton } from '../components/shared';
 import { DataTable, type Column } from '../components/ui/DataTable';
 import { Card, KpiTile, PageHeader, Select, SeverityBadge, Skeleton, Tabs } from '../components/ui';
@@ -18,6 +18,10 @@ export function AlertsPage() {
   const site = query.get('site') ?? '';
   const ack = query.get('ack') ?? '';
   const [selection, setSelection] = useState<Set<string>>(new Set());
+  const [ackError, setAckError] = useState<string>();
+  useSession();
+  const user = currentUser(dataSource.kind === 'mock');
+  const allowed = canOperate(user);
 
   const alerts = useData(() => dataSource.getAlerts());
   const devices = useData(() => dataSource.getDevices());
@@ -55,14 +59,20 @@ export function AlertsPage() {
     });
 
   const ackSelected = async () => {
-    for (const id of selection) await dataSource.acknowledgeAlert(id, CURRENT_USER);
-    setSelection(new Set());
+    if (!user) return;
+    setAckError(undefined);
+    try {
+      for (const id of selection) await dataSource.acknowledgeAlert(id, user.login);
+      setSelection(new Set());
+    } catch (err) {
+      setAckError(err instanceof Error ? err.message : 'Bestätigen fehlgeschlagen');
+    }
   };
 
   const columns: Column<Alert>[] = [
     {
       key: 'sel', header: '', width: 34,
-      render: (a) => a.state === 'active' ? (
+      render: (a) => a.state === 'active' && allowed ? (
         <input type="checkbox" aria-label="Alarm auswählen" checked={selection.has(a.id)} onChange={() => toggle(a.id)} onClick={(e) => e.stopPropagation()} />
       ) : null,
     },
@@ -106,14 +116,17 @@ export function AlertsPage() {
           <div className="grow"><input className="input" placeholder="Gerät, Sensor oder Beschreibung …" aria-label="Alarme durchsuchen" value={q} onChange={(e) => updateQuery({ q: e.target.value })} /></div>
           <Select label="Standort" value={site} onChange={(v) => updateQuery({ site: v })} options={[{ value: '', label: 'Alle Standorte' }, ...(sites.data ?? []).map((s) => ({ value: s.id, label: s.name }))]} />
           <Select label="Bestätigung" value={ack} onChange={(v) => updateQuery({ ack: v })} options={[{ value: '', label: 'Bestätigt & unbestätigt' }, { value: 'no', label: 'Nur unbestätigte' }, { value: 'yes', label: 'Nur bestätigte' }]} />
-          {selectable.length > 0 && (
+          {allowed && selectable.length > 0 && (
             <button className="btn" onClick={() => setSelection(selection.size === selectable.length ? new Set() : new Set(selectable.map((a) => a.id)))}>
               {selection.size === selectable.length ? 'Auswahl aufheben' : 'Alle unbestätigten wählen'}
             </button>
           )}
-          <button className="btn primary" disabled={selection.size === 0} onClick={ackSelected}>
-            <Icon name="check" size={15} /> {selection.size || ''} bestätigen
-          </button>
+          {allowed && (
+            <button className="btn primary" disabled={selection.size === 0} onClick={ackSelected} title={ackError}>
+              <Icon name="check" size={15} /> {selection.size || ''} bestätigen
+            </button>
+          )}
+          {ackError && <span className="small" style={{ color: 'var(--critical)' }} role="alert">{ackError}</span>}
         </div>
         {alerts.data && devices.data && sensors.data ? (
           <DataTable rows={rows} columns={columns} rowKey={(a) => a.id} initialSort={{ key: 'time', dir: 'desc' }} empty="Keine Alarme in dieser Ansicht." />

@@ -1,0 +1,56 @@
+# nginx-Konfiguration für das NEXUS-Monitor-Frontend (Port 8080, ohne Root-Rechte)
+#
+# Vorlage: Beim Containerstart ersetzt das nginx-Image ${NEXUS_BACKEND_URL} und
+# ${NEXUS_DNS_RESOLVER} durch die Umgebungsvariablen (envsubst) und schreibt das
+# Ergebnis nach /etc/nginx/conf.d/default.conf. Andere $-Variablen bleiben unberührt.
+server {
+    listen 8080;
+    server_name _;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # Sicherheitsheader (in Locations mit eigenem add_header erneut eingebunden,
+    # da nginx add_header-Direktiven sonst nicht vererbt)
+    include /etc/nginx/conf.d/security-headers.inc;
+
+    # Healthcheck für Docker / Load-Balancer
+    location = /healthz {
+        access_log off;
+        default_type text/plain;
+        return 200 "ok\n";
+    }
+
+    # Laufzeit-Konfiguration nie cachen
+    location = /config.js {
+        include /etc/nginx/conf.d/security-headers.inc;
+        add_header Cache-Control "no-store" always;
+    }
+
+    # Gebaute Assets haben Hash im Dateinamen -> lange cachen
+    location /assets/ {
+        include /etc/nginx/conf.d/security-headers.inc;
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+    }
+
+    # API an das Backend weiterreichen. Die Adresse wird erst bei der Anfrage
+    # aufgelöst (resolver + Variable): Läuft kein Backend (Mock-Modus), startet
+    # nginx trotzdem, und /api/ antwortet mit 502.
+    location /api/ {
+        resolver ${NEXUS_DNS_RESOLVER} valid=10s ipv6=off;
+        set $nexus_backend ${NEXUS_BACKEND_URL};
+        proxy_pass $nexus_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 120s;
+        client_max_body_size 10m;
+        include /etc/nginx/conf.d/security-headers.inc;
+        add_header Cache-Control "no-store" always;
+    }
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}

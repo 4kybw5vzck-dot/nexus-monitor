@@ -4,7 +4,8 @@ import { appConfig } from '../../app/config';
 import { Link, navigate, useLocation } from '../../app/router';
 import { useData } from '../../hooks/useData';
 import { formatTime } from '../../utils/format';
-import { CURRENT_USER, CURRENT_USER_INITIALS } from '../../app/session';
+import { currentUser, initials, useSession } from '../../app/session';
+import { httpDataSource } from '../../api';
 import { DEVICE_TYPE_LABEL } from '../../utils/status';
 import { Icon, deviceIcon, type IconName } from '../ui/Icon';
 import { StatusDot } from '../ui';
@@ -133,6 +134,23 @@ function GlobalSearch() {
   );
 }
 
+function UserChip() {
+  useSession();
+  const user = currentUser(dataSource.kind === 'mock');
+  if (!user) return null;
+  return (
+    <div className="user-chip" title={`${user.name} (${user.role})`}>
+      <span className="avatar">{initials(user.name)}</span>
+      <span className="name">{user.login}</span>
+      {httpDataSource && (
+        <button className="btn small ghost logout" onClick={() => void httpDataSource?.logout()} title="Abmelden">
+          Abmelden
+        </button>
+      )}
+    </div>
+  );
+}
+
 function Topbar({ onMenu }: { onMenu: () => void }) {
   const [stamp, setStamp] = useState(dataSource.dataTimestamp ?? Date.now());
   useEffect(() => dataSource.subscribe(() => setStamp(dataSource.dataTimestamp ?? Date.now())), []);
@@ -141,12 +159,12 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
       <button className="btn ghost menu-btn" onClick={onMenu} aria-label="Navigation öffnen"><Icon name="menu" /></button>
       <GlobalSearch />
       <div className="topbar-right">
-        {dataSource.kind === 'mock' && <span className="mock-chip" title="Phase 1: Alle Daten sind fiktive Beispieldaten">DEMO · MOCK-DATEN</span>}
+        {dataSource.kind === 'mock' && <span className="mock-chip" title="Mock-Modus: Alle Daten sind fiktive Beispieldaten">DEMO · MOCK-DATEN</span>}
         <span className="muted small tabular" title="Zeitpunkt des Datenstands">Stand {formatTime(stamp)}</span>
         <button className="btn small" onClick={() => dataSource.refresh?.()} title="Daten aktualisieren">
           <Icon name="refresh" size={15} /> Aktualisieren
         </button>
-        <div className="user-chip"><span className="avatar">{CURRENT_USER_INITIALS}</span><span className="name">{CURRENT_USER}</span></div>
+        <UserChip />
       </div>
     </header>
   );

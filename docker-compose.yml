@@ -1,10 +1,11 @@
 # NEXUS Monitor – Docker Compose
 #
-# Phase 1 (aktuell): nur das Frontend mit Mock-Daten.
+# Nur Oberfläche mit Beispieldaten (Mock-Modus):
 #   docker compose up -d --build
 #
-# Phase 2 (vorbereitet): Datenbank zusätzlich starten.
-#   docker compose --profile backend up -d
+# Mit Backend und Datenbank (in .env: COMPOSE_PROFILES=backend und
+# NEXUS_DATA_SOURCE=http, POSTGRES_PASSWORD setzen):
+#   docker compose up -d --build
 #
 # Alle Einstellungen kommen aus der Datei .env (Vorlage: .env.example).
 # Es sind keine IP-Adressen, Hostnamen oder Zugangsdaten fest eingetragen.
@@ -25,6 +26,8 @@ services:
       NEXUS_DATA_SOURCE: ${NEXUS_DATA_SOURCE:-mock}
       NEXUS_API_BASE_URL: ${NEXUS_API_BASE_URL:-/api}
       NEXUS_INSTANCE_NAME: ${NEXUS_INSTANCE_NAME:-NEXUS Monitor}
+      # Ziel des /api/-Proxys im nginx (Dienst "backend" unten)
+      NEXUS_BACKEND_URL: ${NEXUS_BACKEND_URL:-http://backend:8000}
     ports:
       - "${NEXUS_HTTP_BIND:-0.0.0.0}:${NEXUS_HTTP_PORT:-8080}:8080"
     healthcheck:
@@ -36,7 +39,7 @@ services:
     networks: [nexus]
 
   # ---------------------------------------------------------------------------
-  # Phase 2: PostgreSQL mit TimescaleDB-Erweiterung
+  # PostgreSQL mit TimescaleDB-Erweiterung
   #   - Stammdaten/Konfiguration: normale Tabellen
   #   - Messwerte: TimescaleDB-Hypertables (Kompression, Aufbewahrung)
   # ---------------------------------------------------------------------------
@@ -61,21 +64,39 @@ services:
     # Datenbank bewusst NICHT nach außen veröffentlichen.
 
   # ---------------------------------------------------------------------------
-  # Phase 2: Backend (Python/FastAPI) – Platzhalter, wird mit dem Backend aktiviert
+  # Backend (Python/FastAPI) – REST-API unter /api, über den Frontend-Proxy erreichbar
   # ---------------------------------------------------------------------------
-  # backend:
-  #   profiles: ["backend"]
-  #   build: ./backend
-  #   restart: unless-stopped
-  #   environment:
-  #     NEXUS_DB_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
-  #     NEXUS_SECRET_KEY: ${NEXUS_SECRET_KEY}
-  #   depends_on:
-  #     db: { condition: service_healthy }
-  #   healthcheck:
-  #     test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health')"]
-  #     interval: 30s
-  #   networks: [nexus]
+  backend:
+    profiles: ["backend"]
+    build:
+      context: ./backend
+      args:
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-}
+    image: ${NEXUS_IMAGE_PREFIX:-nexus-monitor}/backend:${NEXUS_VERSION:-latest}
+    restart: unless-stopped
+    environment:
+      NEXUS_DB_HOST: db
+      NEXUS_DB_PORT: "5432"
+      NEXUS_DB_NAME: ${POSTGRES_DB:-nexus}
+      NEXUS_DB_USER: ${POSTGRES_USER:-nexus}
+      NEXUS_DB_PASSWORD: ${POSTGRES_PASSWORD:-}
+      NEXUS_SECRET_KEY: ${NEXUS_SECRET_KEY:-}
+      NEXUS_ADMIN_LOGIN: ${NEXUS_ADMIN_LOGIN:-admin}
+      NEXUS_ADMIN_PASSWORD: ${NEXUS_ADMIN_PASSWORD:-}
+      NEXUS_SESSION_HOURS: ${NEXUS_SESSION_HOURS:-12}
+      NEXUS_SEED_DEMO: ${NEXUS_SEED_DEMO:-false}
+      NEXUS_LOG_LEVEL: ${NEXUS_LOG_LEVEL:-INFO}
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=4)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks: [nexus]
+    # Bewusst KEIN veröffentlichter Port: Zugriff nur über den Frontend-Proxy (/api).
 
   # ---------------------------------------------------------------------------
   # Phase 3: Remote-Collector – läuft später je Standort auf eigenem Host

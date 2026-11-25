@@ -26,13 +26,21 @@ export function DiscoveryPage() {
 
   const valid = /^(\d{1,3}\.){3}\d{1,3}\/(2[4-9]|3[0-2])$/.test(range.trim());
 
+  const [scanError, setScanError] = useState<string>();
+
   const start = async () => {
     setResults(null);
     setPicked(new Set());
     setProgress(0);
-    const r = await dataSource.runDiscovery(range.trim(), setProgress);
-    setResults(r);
-    setProgress(null);
+    setScanError(undefined);
+    try {
+      const r = await dataSource.runDiscovery(range.trim(), setProgress);
+      setResults(r);
+    } catch (err) {
+      setScanError(err instanceof Error ? err.message : 'Discovery fehlgeschlagen');
+    } finally {
+      setProgress(null);
+    }
   };
 
   const fresh = results?.filter((r) => !r.alreadyMonitored && !added.has(r.ip)) ?? [];
@@ -42,8 +50,9 @@ export function DiscoveryPage() {
       <PageHeader title="Discovery" description="Netzwerkbereiche nach neuen Geräten durchsuchen" />
       <div className="notice warn">
         <Icon name="info" size={18} />
-        <div><b>Simulation (Phase 1):</b> Es findet kein echter Netzwerkscan statt. Die Ergebnisse werden aus Beispieldaten erzeugt. Echte Scans übernimmt später der Remote-Collector des jeweiligen Standorts.</div>
+        <div><b>Simulation:</b> Es findet kein echter Netzwerkscan statt. Die Ergebnisse werden aus Beispieldaten erzeugt. Echte Scans übernimmt später der Remote-Collector des jeweiligen Standorts.</div>
       </div>
+      {scanError && <div className="login-error" role="alert" style={{ marginTop: 12 }}>{scanError}</div>}
       <Card title="Scan konfigurieren">
         <div className="grid grid-3">
           <div className="field">
@@ -137,7 +146,7 @@ export function DiscoveryPage() {
               </tbody>
             </table>
           </div>
-          {added.size > 0 && <div className="table-foot">Hinweis: In Phase 1 werden hinzugefügte Geräte nicht dauerhaft gespeichert.</div>}
+          {added.size > 0 && <div className="table-foot">Hinweis: Hinzugefügte Geräte werden noch nicht dauerhaft gespeichert.</div>}
         </Card>
       )}
     </>

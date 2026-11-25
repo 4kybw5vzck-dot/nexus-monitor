@@ -30,9 +30,14 @@ RUN npm run build
 FROM nginxinc/nginx-unprivileged:${NGINX_VERSION}-alpine AS base
 LABEL org.opencontainers.image.title="nexus-monitor-frontend" \
       org.opencontainers.image.description="NEXUS Monitor Web-Oberfläche"
-COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
+# Vorlage – envsubst des nginx-Images erzeugt daraus /etc/nginx/conf.d/default.conf
+COPY docker/default.conf.template /etc/nginx/templates/default.conf.template
 COPY docker/security-headers.inc /etc/nginx/conf.d/security-headers.inc
 COPY --chmod=755 docker/40-runtime-config.sh /docker-entrypoint.d/40-runtime-config.sh
+# Backend-Adresse für den /api/-Proxy (Dienstname aus docker-compose) und
+# DNS-Server von Docker (löst Dienstnamen zur Laufzeit auf)
+ENV NEXUS_BACKEND_URL=http://backend:8000 \
+    NEXUS_DNS_RESOLVER=127.0.0.11
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD wget -qO- http://127.0.0.1:8080/healthz >/dev/null || exit 1

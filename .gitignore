@@ -2,6 +2,14 @@
 node_modules/
 dist/
 coverage/
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+.venv/
+venv/
+.pytest_cache/
 # Konfiguration mit Geheimnissen
 .env
 .env.*

@@ -216,7 +216,7 @@ function ConfigTab({ device }: { device: Device }) {
         <div className="hstack" style={{ marginTop: 16 }}>
           <button className="btn primary" disabled={!dirty} onClick={() => setSaved(true)}>Speichern</button>
           <button className="btn" disabled={!dirty} onClick={() => setCfg(device.config)}>Verwerfen</button>
-          {saved && <span className="text-ok small">Übernommen (Demo – wird in Phase 1 nicht gespeichert)</span>}
+          {saved && <span className="text-ok small">Übernommen (Demo – wird noch nicht gespeichert)</span>}
         </div>
       </Card>
       <div className="vstack" style={{ gap: 16 }}>

@@ -8,7 +8,7 @@ const delay = <T,>(value: T, ms = 120): Promise<T> =>
   new Promise((resolve) => setTimeout(() => resolve(structuredClone(value)), ms));
 
 /**
- * Datenquelle für Phase 1. Hält einen deterministisch erzeugten Datenbestand
+ * Datenquelle für den Mock-Modus. Hält einen deterministisch erzeugten Datenbestand
  * im Speicher. Änderungen (z. B. Alarmbestätigungen) leben nur bis zum Neuladen
  * der Seite – es gibt bewusst keine Persistenz und keine Netzwerkzugriffe.
  */

@@ -1,22 +1,25 @@
 import type { MonitoringDataSource } from './dataSource';
 import { MockDataSource } from './mockDataSource';
+import { HttpDataSource } from './httpDataSource';
 import { appConfig } from '../app/config';
 
 /**
- * Zentrale Auswahl der Datenquelle.
- *
- * Phase 1: ausschließlich Mock-Daten.
- * Phase 2: Bei VITE_DATA_SOURCE=http wird hier eine HttpDataSource erzeugt, die
- * dasselbe Interface gegen das FastAPI-Backend (appConfig.apiBaseUrl) umsetzt.
- * Die Seiten bleiben dabei unverändert.
+ * Zentrale Auswahl der Datenquelle (Laufzeit-Konfiguration NEXUS_DATA_SOURCE):
+ *   mock – Beispieldaten im Browser, keine Anmeldung
+ *   http – FastAPI-Backend unter appConfig.apiBaseUrl, mit Anmeldung
+ * Die Seiten bleiben in beiden Fällen unverändert.
  */
-function createDataSource(): MonitoringDataSource & { refresh?: () => void; dataTimestamp?: number } {
-  if (appConfig.dataSource === 'http') {
-    console.warn('[NEXUS] HTTP-Datenquelle ist in Phase 1 noch nicht implementiert – verwende Mock-Daten.');
-  }
-  return new MockDataSource();
+type AppDataSource = MonitoringDataSource & { refresh?: () => void; dataTimestamp?: number };
+
+function createDataSource(): AppDataSource {
+  return appConfig.dataSource === 'http' ? new HttpDataSource(appConfig.apiBaseUrl) : new MockDataSource();
 }
 
 export const dataSource = createDataSource();
+
+/** HTTP-Datenquelle (für Anmeldung/Abmeldung) – im Mock-Modus undefined. */
+export const httpDataSource = dataSource instanceof HttpDataSource ? dataSource : undefined;
+
 export type { MonitoringDataSource } from './dataSource';
+export { ApiError } from './httpDataSource';
 export * from './types';

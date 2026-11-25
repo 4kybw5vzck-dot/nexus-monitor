@@ -296,3 +296,13 @@ table.table { width: 100%; border-collapse: collapse; font-size: 13px; }
   .mock-chip { display: none; }
 }
 .table td a, .table td .mono { white-space: nowrap; }
+
+/* ---------- Anmeldung (HTTP-Modus) ---------- */
+.login-screen { min-height: 100vh; display: grid; place-items: center; padding: 24px; background: var(--bg); }
+.login-card { width: 100%; max-width: 360px; }
+.login-brand { height: auto; }
+.login-body { display: flex; flex-direction: column; gap: 14px; padding: 20px 22px 22px; }
+.login-title { font-size: 18px; font-weight: 650; margin: 0; }
+.login-error { padding: 9px 12px; border-radius: var(--radius-sm); background: var(--critical-soft); border: 1px solid rgba(229, 83, 75, 0.4); color: var(--text); font-size: 13px; }
+.login-submit { justify-content: center; margin-top: 4px; }
+.user-chip .logout { margin-left: 2px; }

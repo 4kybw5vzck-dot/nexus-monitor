@@ -13,6 +13,9 @@ import { DiscoveryPage } from './pages/DiscoveryPage';
 import { CollectorsPage } from './pages/CollectorsPage';
 import { AdminPage } from './pages/AdminPage';
 import { Empty, PageHeader } from './components/ui';
+import { LoginPage } from './pages/LoginPage';
+import { dataSource } from './api';
+import { useSession } from './app/session';
 
 const routes: RouteDef[] = [
   { pattern: '/dashboard', render: () => <DashboardPage /> },
@@ -29,6 +32,12 @@ const routes: RouteDef[] = [
 ];
 
 export function App() {
+  const session = useSession();
+  if (dataSource.kind === 'http' && !session) return <LoginPage />;
+  return <MainApp />;
+}
+
+function MainApp() {
   const { path } = useLocation();
 
   useEffect(() => {

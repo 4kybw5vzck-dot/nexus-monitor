@@ -59,7 +59,7 @@ export interface MonitoringDataSource {
   getReports(): Promise<ReportDefinition[]>;
 
   /**
-   * Netzwerk-Discovery. In Phase 1 rein simuliert – es findet KEIN echter Scan statt.
+   * Netzwerk-Discovery. Derzeit rein simuliert (auch im Backend) – es findet KEIN echter Scan statt.
    */
   runDiscovery(range: string, onProgress?: (pct: number) => void): Promise<DiscoveryResult[]>;
 

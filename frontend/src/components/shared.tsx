@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { dataSource, type Alert, type Device, type EventLogEntry, type Sensor } from '../api';
 import { Link } from '../app/router';
 import { formatDuration, formatRelative, formatValue } from '../utils/format';
-import { CURRENT_USER } from '../app/session';
+import { canOperate, currentUser, useSession } from '../app/session';
 import { SeverityBadge, StatusDot } from './ui';
 import { Icon } from './ui/Icon';
 
@@ -14,22 +14,29 @@ export function sensorValueText(s: Sensor): string {
 
 export function AckButton({ alert }: { alert: Alert }) {
   const [busy, setBusy] = useState(false);
-  if (alert.state !== 'active') return null;
+  const [error, setError] = useState<string>();
+  useSession();
+  const user = currentUser(dataSource.kind === 'mock');
+  if (alert.state !== 'active' || !canOperate(user)) return null;
   return (
     <button
       className="btn small"
       disabled={busy}
+      title={error}
       onClick={async (e) => {
         e.stopPropagation();
         setBusy(true);
+        setError(undefined);
         try {
-          await dataSource.acknowledgeAlert(alert.id, CURRENT_USER);
+          await dataSource.acknowledgeAlert(alert.id, user!.login);
+        } catch (err) {
+          setError(err instanceof Error ? err.message : 'Bestätigen fehlgeschlagen');
         } finally {
           setBusy(false);
         }
       }}
     >
-      <Icon name="check" size={14} /> Bestätigen
+      <Icon name="check" size={14} /> {error ? 'Erneut versuchen' : 'Bestätigen'}
     </button>
   );
 }

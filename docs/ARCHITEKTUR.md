@@ -27,7 +27,7 @@
 | Phase | Inhalt | Status |
 |---|---|---|
 | 1 | Frontend mit Mock-Daten, Containerstruktur vorbereitet | **umgesetzt** |
-| 2 | Backend (FastAPI), Datenbankschema, Authentifizierung, `HttpDataSource` | vorbereitet |
+| 2 | Backend (FastAPI), Datenbankschema, Authentifizierung, `HttpDataSource` | **umgesetzt** (Messwerte vorerst Demo-Datensatz) |
 | 3 | Monitoring-Engine: ICMP, SNMP, WMI, SSH, HTTP, DNS; Remote-Collector | geplant |
 | 4 | Alarmierung, Reporting, erweiterte Netzwerkkarten | geplant |
 | 5 | Import der PRTG-Konfiguration und relevanter Historie | geplant |
@@ -41,7 +41,7 @@
 |---|---|---|
 | Domäne | `src/api/types.ts` | Typen: Site, Device, Sensor, Alert, Link, Collector … |
 | Schnittstelle | `src/api/dataSource.ts` | `MonitoringDataSource` – einziger Zugang der Seiten zu Daten |
-| Implementierung | `src/api/mockDataSource.ts` | Phase 1: In-Memory-Daten; Phase 2: `HttpDataSource` |
+| Implementierung | `src/api/mockDataSource.ts`, `src/api/httpDataSource.ts` | Mock: In-Memory-Daten · HTTP: FastAPI-Backend mit Anmeldung |
 | Mock-Erzeugung | `src/mock/*` | Stammdaten, Sensor-Vorlagen je Gerätetyp, Störungsszenarien, Verlaufsgenerator |
 | Darstellung | `src/pages`, `src/components` | Seiten und wiederverwendbare Bausteine |
 
@@ -49,13 +49,14 @@
 
 `useData(() => dataSource.getX())` lädt asynchron und abonniert Änderungen (`subscribe`). Bestätigt jemand einen Alarm, benachrichtigt die Datenquelle alle Abonnenten; Seitenleiste, Dashboard und Alarmliste aktualisieren sich automatisch. Mit dem Backend kann `subscribe` später über WebSocket/Server-Sent Events gespeist werden.
 
-### Umstieg auf das Backend (Phase 2)
+### Datenquelle wählen
 
-1. `src/api/httpDataSource.ts` anlegen, die `MonitoringDataSource` per `fetch(appConfig.apiBaseUrl + …)` umsetzt.
-2. In `src/api/index.ts` bei `appConfig.dataSource === 'http'` diese Klasse erzeugen.
-3. Im Container `NEXUS_DATA_SOURCE=http` setzen und in `frontend/docker/nginx.conf` den `/api/`-Proxy aktivieren.
+`NEXUS_DATA_SOURCE` (Laufzeit-Konfiguration `config.js`) entscheidet in `src/api/index.ts`:
 
-Seiten und Komponenten bleiben unverändert.
+- `mock` – `MockDataSource`, keine Anmeldung, fester Demo-Benutzer.
+- `http` – `HttpDataSource` gegen `appConfig.apiBaseUrl` (Standard `/api`, nginx leitet an das Backend weiter). Ohne gültige Sitzung zeigt `App.tsx` die Anmeldeseite; eine 401-Antwort beendet die Sitzung (`src/app/session.ts`, gespeichert in `sessionStorage`). Schaltflächen zum Bestätigen und für Discovery erscheinen nur für Operator und Administrator.
+
+Seiten und Komponenten sind für beide Datenquellen identisch.
 
 ### Bewusste Eigenentwicklungen
 
@@ -67,37 +68,75 @@ Seiten und Komponenten bleiben unverändert.
 
 Sollte der Diagrammbedarf deutlich wachsen (z. B. Zoom in Zeitreihen über Monate, Heatmaps), ist der Wechsel auf eine Bibliothek wie ECharts oder Recharts möglich, ohne Seiten umzubauen: Die Seiten nutzen nur `TimeSeriesChart`, `DonutChart` usw. Ein solcher Wechsel wäre eine Architekturentscheidung und wird vorher abgestimmt.
 
-## REST-API-Entwurf (Phase 2)
+## Backend (Phase 2)
+
+| Baustein | Datei | Aufgabe |
+|---|---|---|
+| Konfiguration | `backend/app/config.py` | Nur Umgebungsvariablen `NEXUS_*`; DB-Verbindung aus Einzelwerten (Passwörter mit Sonderzeichen ohne URL-Maskierung) |
+| Datenmodell | `backend/app/models.py` | SQLAlchemy 2 |
+| Migrationen | `backend/app/migrations/` | Alembic, beim Start automatisch (Advisory-Lock gegen parallele Ausführung) |
+| Abfragen | `backend/app/services.py` | Ableitungen und Zeitreihen in SQL |
+| Endpunkte | `backend/app/api.py`, `backend/app/auth.py` | REST-API, Anmeldung, Rollen |
+| Erststart | `backend/app/seed/` | Administratorkonto, optional Demo-Datensatz |
+| Verwaltung | `backend/app/cli.py` | `set-password` |
+
+Synchrones SQLAlchemy mit psycopg 3: einfacher als async und für die zu erwartende Last ausreichend (FastAPI führt synchrone Endpunkte in einem Thread-Pool aus).
+
+### REST-API
 
 Die Endpunkte bilden das Interface `MonitoringDataSource` ab:
 
-| Methode | Pfad | Entspricht |
-|---|---|---|
-| GET | `/api/summary` | `getSummary()` |
-| GET | `/api/sites`, `/api/sites/{id}` | `getSites()`, `getSite()` |
-| GET | `/api/devices`, `/api/devices/{id}` | `getDevices()`, `getDevice()` |
-| GET | `/api/sensors?device_id=` | `getSensors()` |
-| GET | `/api/sensors/{id}/history?hours=` | `getSensorHistory()` |
-| GET | `/api/metrics/aggregate?metric=&hours=` | `getAggregateSeries()` |
-| GET | `/api/availability?hours=` | `getAvailability()` |
-| GET | `/api/alerts` | `getAlerts()` |
-| POST | `/api/alerts/{id}/acknowledge` | `acknowledgeAlert()` |
-| GET | `/api/events?limit=`, `/api/devices/{id}/events` | `getEvents()`, `getDeviceEvents()` |
-| GET | `/api/links`, `/api/collectors`, `/api/users`, `/api/notification-rules`, `/api/reports` | … |
-| POST | `/api/discovery` (asynchroner Job) | `runDiscovery()` |
-| GET | `/api/health` | Healthcheck |
+| Methode | Pfad | Entspricht | Rolle |
+|---|---|---|---|
+| GET | `/api/summary` | `getSummary()` | angemeldet |
+| GET | `/api/sites`, `/api/sites/{id}` | `getSites()`, `getSite()` | angemeldet |
+| GET | `/api/devices`, `/api/devices/{id}` | `getDevices()`, `getDevice()` | angemeldet |
+| GET | `/api/sensors?device_id=`, `/api/sensors/{id}` | `getSensors()`, `getSensor()` | angemeldet |
+| GET | `/api/sensors/{id}/history?hours=` | `getSensorHistory()` | angemeldet |
+| GET | `/api/metrics/aggregate?metric=&hours=` | `getAggregateSeries()` | angemeldet |
+| GET | `/api/availability?hours=` | `getAvailability()` | angemeldet |
+| GET | `/api/alerts` | `getAlerts()` | angemeldet |
+| POST | `/api/alerts/{id}/acknowledge` | `acknowledgeAlert()` – Benutzer aus der Anmeldung | Operator, Administrator |
+| GET | `/api/events?limit=`, `/api/devices/{id}/events` | `getEvents()`, `getDeviceEvents()` | angemeldet |
+| GET | `/api/links`, `/api/collectors`, `/api/users`, `/api/notification-rules`, `/api/reports` | … | angemeldet |
+| POST | `/api/discovery` | `runDiscovery()` – **simuliert**, kein Netzwerkzugriff | Operator, Administrator |
+| POST | `/api/auth/login`, `/api/auth/logout`; GET `/api/auth/me` | Anmeldung | – |
+| GET | `/api/health` | Healthcheck | – |
 
-Zeitstempel: ISO 8601 in UTC. Feldnamen wie in `types.ts` (camelCase im JSON).
+Zeitstempel: ISO 8601 in UTC mit `Z`. Feldnamen wie in `types.ts` (camelCase im JSON). Fehler: `{"detail": "<deutsche Meldung>"}`. OpenAPI-Beschreibung unter `/api/docs`.
 
-## Datenmodell (Entwurf Phase 2)
+`hours` ist auf 1–2160 (90 Tage) begrenzt. Auflösung wie im Frontend: bis 24 h 5 Minuten, bis 7 Tage 30 Minuten, darüber 2 Stunden (`date_bin`, Standard-PostgreSQL – funktioniert mit und ohne TimescaleDB).
 
-- `sites`, `devices`, `sensors`, `sensor_thresholds`, `links`, `collectors`, `users`, `roles`, `notification_rules`, `credential_profiles` (verschlüsselt), `alerts`, `events`
-- `measurements(time, sensor_id, value)` als TimescaleDB-Hypertable mit Continuous Aggregates (5 Min., 1 Std., 1 Tag) für schnelle Diagramme über lange Zeiträume
-- Migrationen mit Alembic, versioniert im Repository
+### Abgeleitete Werte (nicht gespeichert)
+
+- Gerätestatus = schlechtester Sensorstatus (`critical > warning > unknown > ok > paused`), Sensoranzahl, letzter Kontakt (jüngster Sensor-Check), Laufzeit aus `boot_time`.
+- Standort eines Alarms über das Gerät.
+- Sensoranzahl je Collector: zentral = alle, remote = Sensoren am Standort.
+- Verfügbarkeit: Anteil der Intervalle, deren Ping-Mittelwert unter der kritischen Schwelle liegt.
+- WAN-Traffic ein/aus: Summe der Sensoren „Traffic WAN“, vorläufig im Verhältnis 68/32 aufgeteilt wie im Mock – bis die Monitoring-Engine getrennte Kanäle liefert (Phase 3).
+
+## Datenmodell
+
+Tabellen: `sites`, `collectors`, `devices`, `sensors`, `measurements`, `links`, `alerts`, `events`, `users`, `auth_sessions`, `credential_profiles`, `notification_rules`, `reports`.
+
+- **Messwerte:** `measurements(sensor_id, time, value)`, Primärschlüssel `(sensor_id, time)`. Ist TimescaleDB verfügbar, macht die Migration daraus eine Hypertable (Chunks je Tag) mit Kompression ab 7 Tagen (segmentiert nach Sensor). Ohne TimescaleDB bleibt es eine normale Tabelle.
+- **Schwellwerte** stehen direkt am Sensor (`warning_threshold`, `critical_threshold`, `inverted`) – 1:1, daher keine eigene Tabelle.
+- **Rollen** sind ein fester Wertebereich (CHECK-Constraint): Administrator, Operator, Nur Lesen.
+- **Zugangsprofile:** Geräte verweisen auf `credential_profiles`. Die Spalte `secret_ciphertext` nimmt ab Phase 3 die mit `NEXUS_SECRET_KEY` verschlüsselten Zugangsdaten auf und wird von der API nie ausgegeben.
+- Wertebereiche (Gerätetyp, Sensortyp, Status …) sind per CHECK-Constraint abgesichert.
+
+Geplant, sobald die Datenmenge es erfordert: Continuous Aggregates (5 Min. / 1 Std. / 1 Tag) und Aufbewahrungsregeln je Auflösung.
+
+### Demo-Datensatz
+
+`frontend/scripts/export-demo-data.ts` (`npm run export:demo`) exportiert den Mock-Bestand samt 30 Tagen Verlauf nach `backend/app/seed/demo_data.json.gz` (≈ 110 KiB). So zeigen Mock- und HTTP-Modus dieselben Daten; die Backend-Tests prüfen das gegen die Kennzahlen des Mocks.
 
 ## Sicherheit
 
 - Keine Zugangsdaten im Code oder in Gerätedaten – Geräte verweisen nur auf **Zugangsprofile**.
 - Geheimnisse ausschließlich über `.env` (nicht in Git).
-- Container laufen ohne Root-Rechte (Frontend: `nginx-unprivileged`).
-- Datenbank wird nicht nach außen veröffentlicht.
+- Container laufen ohne Root-Rechte (Frontend: `nginx-unprivileged`, Backend: Benutzer `nexus`, UID 10001).
+- Datenbank und Backend werden nicht nach außen veröffentlicht; Zugriff nur über den Proxy der Oberfläche.
+- Passwörter: scrypt mit Salz je Passwort (Python-Standardbibliothek). Sitzungen: zufälliges 256-Bit-Token, in der Datenbank nur als SHA-256-Hash; Abmelden und Passwortänderung beenden Sitzungen serverseitig.
+- Schutz gegen Passwort-Raten: Sperre nach 5 Fehlversuchen je Benutzername bzw. Client-Adresse für 5 Minuten (im Speicher des Backends).
+- Gleiche Fehlermeldung für unbekannte Benutzer und falsche Passwörter.

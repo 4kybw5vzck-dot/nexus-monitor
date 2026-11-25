@@ -62,7 +62,7 @@ function NotificationsTab() {
   useEffect(() => { if (rules.data) setLocal(rules.data); }, [rules.data]);
   if (!rules.data) return <Skeleton height={220} />;
   return (
-    <Card flush title="Benachrichtigungsregeln" sub="Änderungen gelten in Phase 1 nur bis zum Neuladen">
+    <Card flush title="Benachrichtigungsregeln" sub="Bearbeiten wird noch nicht gespeichert – Änderungen gelten nur bis zum Neuladen">
       <div className="table-wrap">
         <table className="table">
           <thead><tr><th>Aktiv</th><th>Regel</th><th>Auslöser</th><th>Kanal</th><th>Ziel</th></tr></thead>
@@ -95,7 +95,7 @@ function SystemTab() {
   const rows: Array<[string, string]> = [
     ['Instanzname', appConfig.instanceName],
     ['Version', appConfig.version],
-    ['Datenquelle', dataSource.kind === 'mock' ? 'Mock-Daten (Phase 1)' : 'Backend-API'],
+    ['Datenquelle', dataSource.kind === 'mock' ? 'Mock-Daten im Browser' : 'Backend-API'],
     ['API-Basis-URL', appConfig.apiBaseUrl],
     ['Betriebsmodus', 'Vollständig lokal, keine Cloud-Dienste'],
     ['Zeitzone (Browser)', Intl.DateTimeFormat().resolvedOptions().timeZone],
@@ -105,13 +105,13 @@ function SystemTab() {
       <Card title="Systeminformationen">
         <dl className="kv">{rows.map(([k, v]) => <div key={k} style={{ display: 'contents' }}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>
       </Card>
-      <Card title="Geplante Komponenten">
+      <Card title="Komponenten">
         <div className="list" style={{ margin: '0 -16px' }}>
           {[
-            ['Frontend (React/TypeScript)', 'Phase 1 – vorhanden', 'ok'],
-            ['Backend (Python/FastAPI)', 'Phase 2', 'paused'],
-            ['PostgreSQL – Konfiguration', 'Phase 2 – im Compose vorbereitet', 'paused'],
-            ['TimescaleDB – Messwerte', 'Phase 2 – im Compose vorbereitet', 'paused'],
+            ['Frontend (React/TypeScript)', 'vorhanden', 'ok'],
+            ['Backend (Python/FastAPI)', dataSource.kind === 'http' ? 'vorhanden – aktiv' : 'vorhanden – im Mock-Modus nicht genutzt', dataSource.kind === 'http' ? 'ok' : 'paused'],
+            ['PostgreSQL – Konfiguration', dataSource.kind === 'http' ? 'vorhanden – aktiv' : 'vorhanden – im Mock-Modus nicht genutzt', dataSource.kind === 'http' ? 'ok' : 'paused'],
+            ['TimescaleDB – Messwerte', 'vorhanden – Messwerte aus Demo-Datensatz', dataSource.kind === 'http' ? 'ok' : 'paused'],
             ['Monitoring-Engine (SNMP, ICMP, WMI …)', 'Phase 3', 'paused'],
             ['Remote-Collectoren', 'Phase 3', 'paused'],
           ].map(([name, phase, st]) => (
@@ -131,8 +131,8 @@ function BackupTab() {
     <div className="grid grid-2">
       <Card title="Datensicherung und Wiederherstellung">
         <p style={{ marginTop: 0, color: 'var(--text-2)' }}>
-          Ab Phase 2 werden Konfiguration (PostgreSQL), Messwerte (TimescaleDB) und die <span className="mono">.env</span>-Konfiguration
-          über Skripte gesichert. Die Sicherung ist ein einzelnes Archiv, das auf einem anderen Server wiederhergestellt werden kann.
+          Konfiguration (PostgreSQL), Messwerte (TimescaleDB) und die <span className="mono">.env</span>-Konfiguration
+          werden über Skripte gesichert. Die Sicherung ist ein einzelnes Archiv, das auf einem anderen Server wiederhergestellt werden kann.
         </p>
         <pre className="mono" style={{ background: 'var(--bg-elev)', padding: 12, borderRadius: 6, border: '1px solid var(--border)', overflowX: 'auto' }}>
 {`# Sicherung
@@ -145,7 +145,9 @@ function BackupTab() {
       </Card>
       <div className="notice warn">
         <Icon name="info" size={18} />
-        <div>In Phase 1 gibt es noch keine persistenten Daten – alle Werte sind Mock-Daten im Browser. Die Skripte sind vorbereitet und werden mit dem Backend aktiv.</div>
+        <div>{dataSource.kind === 'mock'
+          ? 'Im Mock-Modus gibt es keine persistenten Daten – alle Werte entstehen im Browser. Die Sicherung betrifft dann nur die Konfiguration.'
+          : 'Die Sicherung enthält die Datenbank, sofern der Datenbankdienst läuft. Die Skripte sind Bash-Skripte (unter Windows: WSL oder Git Bash).'}</div>
       </div>
     </div>
   );

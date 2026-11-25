@@ -1,4 +1,4 @@
-# NEXUS Monitor – Start unter Windows mit Docker Desktop
+﻿# NEXUS Monitor - Start unter Windows mit Docker Desktop
 # Aufruf in PowerShell im Projektordner:   .\start-nexus.ps1
 # Falls Skripte blockiert sind, einmalig:  Set-ExecutionPolicy -Scope Process Bypass
 
@@ -34,6 +34,22 @@ for ($i = 0; $i -lt 30; $i++) {
     if ($state -eq 'healthy') { break }
     Start-Sleep -Seconds 2
 }
+$profiles = (Select-String -Path .env -Pattern '^COMPOSE_PROFILES=(.*)$' | ForEach-Object { $_.Matches[0].Groups[1].Value }) | Select-Object -First 1
+if ($profiles -match 'backend') {
+    Write-Host 'Warte auf Backend und Datenbank (erster Start mit Migration ca. 1 Minute) ...'
+    for ($i = 0; $i -lt 60; $i++) {
+        $state = docker compose ps --format '{{.Health}}' backend 2>$null
+        if ($state -eq 'healthy') { break }
+        Start-Sleep -Seconds 2
+    }
+    $generated = docker compose logs backend 2>$null | Select-String 'Erzeugtes Passwort' | Select-Object -Last 1
+    if ($generated) {
+        Write-Host ''
+        Write-Host 'Erstanmeldung - vom Backend erzeugtes Administratorkonto:' -ForegroundColor Yellow
+        Write-Host ($generated.Line -replace '^.*Administratorkonto', 'Administratorkonto')
+    }
+}
+
 docker compose ps
 Write-Host ""
 Write-Host "NEXUS Monitor: http://localhost:$port" -ForegroundColor Green
