@@ -44,6 +44,20 @@ docker load < nexus-images.tar.gz       # Windows: docker load -i nexus-images.t
 docker compose up -d                    # ohne --build
 ```
 
+## Frontend-Paket: fertig gebaut oder aus dem Quellcode
+
+Standardmäßig (`NEXUS_FRONTEND_TARGET=prebuilt`) verwendet das Image das bereits gebaute Frontend aus `frontend/prebuilt`. Beim `docker compose build` wird dann kein npm ausgeführt und es werden keine Pakete geladen – das funktioniert auch hinter Firmen-Proxys mit SSL-Inspektion und auf Servern ohne Internet (nur das nginx-Basisimage wird benötigt).
+
+Nach Änderungen am Quellcode wird das Paket auf einem Entwicklungsrechner neu erzeugt und mit eingecheckt:
+
+```bash
+cd frontend
+npm install
+npm run build:prebuilt
+```
+
+Alternativ baut `NEXUS_FRONTEND_TARGET=source` direkt im Container (Zugriff auf die npm-Registry nötig; interner Spiegel über `NPM_REGISTRY`).
+
 ## Konfiguration
 
 Alle Einstellungen stehen in `.env` (Vorlage mit Erklärungen: `.env.example`). Nach Änderungen:

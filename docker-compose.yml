@@ -15,6 +15,10 @@ services:
   frontend:
     build:
       context: ./frontend
+      # prebuilt = fertiges Paket, kein npm nötig (Standard) · source = Build aus Quellcode
+      target: ${NEXUS_FRONTEND_TARGET:-prebuilt}
+      args:
+        NPM_REGISTRY: ${NPM_REGISTRY:-}
     image: ${NEXUS_IMAGE_PREFIX:-nexus-monitor}/frontend:${NEXUS_VERSION:-latest}
     restart: unless-stopped
     environment:
